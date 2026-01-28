@@ -1,3 +1,23 @@
+// Package api provides the HTTP API handlers for the Blood on the Clocktower Auto-DM server.
+//
+// @title Blood on the Clocktower Auto-DM API
+// @version 1.0
+// @description AI-powered Storyteller backend for Blood on the Clocktower game.
+// @description Supports real-time WebSocket connections, event sourcing, and multi-agent AI system.
+//
+// @contact.name API Support
+// @contact.url https://github.com/qingchang/Blood-on-the-Clocktower-auto-dm
+//
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+//
+// @host localhost:8080
+// @BasePath /
+//
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Enter 'Bearer {token}' to authorize
 package api
 
 import (
@@ -11,6 +31,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/zap"
 
 	"github.com/qingchang/Blood-on-the-Clocktower-auto-dm/internal/auth"
@@ -39,6 +60,7 @@ func NewServer(st *store.Store, jwt *auth.JWTManager, roomMgr *room.RoomManager,
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
+	r.Use(corsMiddleware)
 
 	s := &Server{
 		Router:  r,
@@ -48,10 +70,20 @@ func NewServer(st *store.Store, jwt *auth.JWTManager, roomMgr *room.RoomManager,
 		logger:  logger,
 	}
 
+	// Health & Metrics
 	r.Get("/health", s.health)
 	r.Handle("/metrics", promhttp.Handler())
+
+	// Swagger documentation
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+	))
+
+	// Auth endpoints
 	r.Post("/v1/auth/register", s.register)
 	r.Post("/v1/auth/login", s.login)
+
+	// Room endpoints (protected)
 	r.Route("/v1/rooms", func(r chi.Router) {
 		r.Use(s.authMiddleware)
 		r.Post("/", s.createRoom)
@@ -60,19 +92,62 @@ func NewServer(st *store.Store, jwt *auth.JWTManager, roomMgr *room.RoomManager,
 		r.Get("/{room_id}/state", s.fetchState)
 		r.Get("/{room_id}/replay", s.replay)
 	})
+
+	// WebSocket endpoint
 	r.Handle("/ws", wsServer)
 	return s
 }
 
+// corsMiddleware handles CORS for all requests.
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Request-ID")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// health godoc
+// @Summary Health check endpoint
+// @Description Returns server health status
+// @Tags System
+// @Produce plain
+// @Success 200 {string} string "ok"
+// @Router /health [get]
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 
+// RegisterRequest represents a user registration request.
+type RegisterRequest struct {
+	Email    string `json:"email" example:"user@example.com"`
+	Password string `json:"password" example:"password123"`
+}
+
+// AuthResponse represents the authentication response.
+type AuthResponse struct {
+	Token  string `json:"token" example:"eyJhbGciOiJIUzI1NiIs..."`
+	UserID string `json:"user_id" example:"550e8400-e29b-41d4-a716-446655440000"`
+}
+
+// register godoc
+// @Summary Register a new user
+// @Description Create a new user account and return JWT token
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body RegisterRequest true "Registration details"
+// @Success 200 {object} AuthResponse
+// @Failure 400 {string} string "invalid json"
+// @Failure 409 {string} string "user exists or db error"
+// @Router /v1/auth/register [post]
 func (s *Server) register(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
+	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
@@ -88,14 +163,28 @@ func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token, _ := s.jwt.Generate(u.ID)
-	json.NewEncoder(w).Encode(map[string]string{"token": token, "user_id": u.ID})
+	json.NewEncoder(w).Encode(AuthResponse{Token: token, UserID: u.ID})
 }
 
+// LoginRequest represents a login request.
+type LoginRequest struct {
+	Email    string `json:"email" example:"user@example.com"`
+	Password string `json:"password" example:"password123"`
+}
+
+// login godoc
+// @Summary User login
+// @Description Authenticate user and return JWT token
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "Login credentials"
+// @Success 200 {object} AuthResponse
+// @Failure 400 {string} string "invalid json"
+// @Failure 401 {string} string "invalid credentials"
+// @Router /v1/auth/login [post]
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
+	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
@@ -110,9 +199,24 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token, _ := s.jwt.Generate(u.ID)
-	json.NewEncoder(w).Encode(map[string]string{"token": token, "user_id": u.ID})
+	json.NewEncoder(w).Encode(AuthResponse{Token: token, UserID: u.ID})
 }
 
+// CreateRoomResponse represents the room creation response.
+type CreateRoomResponse struct {
+	RoomID string `json:"room_id" example:"550e8400-e29b-41d4-a716-446655440000"`
+}
+
+// createRoom godoc
+// @Summary Create a new game room
+// @Description Create a new Blood on the Clocktower game room
+// @Tags Rooms
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} CreateRoomResponse
+// @Failure 401 {string} string "unauthorized"
+// @Failure 500 {string} string "db error"
+// @Router /v1/rooms [post]
 func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(userIDKey).(string)
 	rm := store.Room{ID: uuid.NewString(), CreatedBy: userID, DMUserID: userID, Status: "lobby", CreatedAt: time.Now().UTC()}
@@ -121,16 +225,44 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.AddRoomMember(r.Context(), store.RoomMember{RoomID: rm.ID, UserID: userID, Role: "dm", Joined: time.Now().UTC()})
-	json.NewEncoder(w).Encode(map[string]string{"room_id": rm.ID})
+	json.NewEncoder(w).Encode(CreateRoomResponse{RoomID: rm.ID})
 }
 
+// JoinRoomResponse represents the join room response.
+type JoinRoomResponse struct {
+	Status string `json:"status" example:"joined"`
+}
+
+// joinRoom godoc
+// @Summary Join an existing game room
+// @Description Join a Blood on the Clocktower game room as a player
+// @Tags Rooms
+// @Security BearerAuth
+// @Produce json
+// @Param room_id path string true "Room ID"
+// @Success 200 {object} JoinRoomResponse
+// @Failure 401 {string} string "unauthorized"
+// @Failure 404 {string} string "room not found"
+// @Router /v1/rooms/{room_id}/join [post]
 func (s *Server) joinRoom(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(userIDKey).(string)
 	roomID := chi.URLParam(r, "room_id")
 	_ = s.store.AddRoomMember(r.Context(), store.RoomMember{RoomID: roomID, UserID: userID, Role: "player", Joined: time.Now().UTC()})
-	json.NewEncoder(w).Encode(map[string]string{"status": "joined"})
+	json.NewEncoder(w).Encode(JoinRoomResponse{Status: "joined"})
 }
 
+// fetchEvents godoc
+// @Summary Fetch room events
+// @Description Retrieve events from a room for state synchronization (supports last_seq incremental sync)
+// @Tags Events
+// @Security BearerAuth
+// @Produce json
+// @Param room_id path string true "Room ID"
+// @Param after_seq query integer false "Fetch events after this sequence number"
+// @Success 200 {array} store.StoredEvent
+// @Failure 401 {string} string "unauthorized"
+// @Failure 403 {string} string "forbidden"
+// @Router /v1/rooms/{room_id}/events [get]
 func (s *Server) fetchEvents(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(userIDKey).(string)
 	roomID := chi.URLParam(r, "room_id")
@@ -147,6 +279,18 @@ func (s *Server) fetchEvents(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(events)
 }
 
+// fetchState godoc
+// @Summary Fetch room state
+// @Description Retrieve current game state with visibility projection based on user role
+// @Tags State
+// @Security BearerAuth
+// @Produce json
+// @Param room_id path string true "Room ID"
+// @Success 200 {object} engine.State
+// @Failure 401 {string} string "unauthorized"
+// @Failure 403 {string} string "forbidden"
+// @Failure 500 {string} string "room error"
+// @Router /v1/rooms/{room_id}/state [get]
 func (s *Server) fetchState(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(userIDKey).(string)
 	roomID := chi.URLParam(r, "room_id")
@@ -166,6 +310,19 @@ func (s *Server) fetchState(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(projected)
 }
 
+// replay godoc
+// @Summary Replay game to specific point
+// @Description Rebuild game state up to a specific sequence number for replay/debugging
+// @Tags Events
+// @Security BearerAuth
+// @Produce json
+// @Param room_id path string true "Room ID"
+// @Param to_seq query integer false "Replay up to this sequence number"
+// @Param viewer query string false "View state as specific user"
+// @Success 200 {object} engine.State
+// @Failure 401 {string} string "unauthorized"
+// @Failure 403 {string} string "forbidden"
+// @Router /v1/rooms/{room_id}/replay [get]
 func (s *Server) replay(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(userIDKey).(string)
 	roomID := chi.URLParam(r, "room_id")

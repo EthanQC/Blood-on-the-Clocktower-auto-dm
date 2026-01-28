@@ -23,6 +23,8 @@ import (
 	"github.com/qingchang/Blood-on-the-Clocktower-auto-dm/internal/realtime"
 	"github.com/qingchang/Blood-on-the-Clocktower-auto-dm/internal/room"
 	"github.com/qingchang/Blood-on-the-Clocktower-auto-dm/internal/store"
+
+	_ "github.com/qingchang/Blood-on-the-Clocktower-auto-dm/docs" // Import swagger docs
 )
 
 func main() {

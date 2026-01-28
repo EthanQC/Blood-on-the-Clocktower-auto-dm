@@ -315,8 +315,9 @@ write_event      → 写入事件流
 ### 前置要求
 
 - **Docker & Docker Compose** (用于启动 MySQL、Redis、RabbitMQ、Qdrant)
-- **Go 1.25+** (用于编译后端)
+- **Go 1.25** (用于编译后端)
 - **Node.js 18+** (用于前端开发)
+- **Google Gemini API Key** (用于 AI Agent 功能)
 
 ### 1. 克隆项目
 
@@ -325,10 +326,30 @@ git clone https://github.com/your-username/Blood-on-the-Clocktower-auto-dm.git
 cd Blood-on-the-Clocktower-auto-dm
 ```
 
-### 2. 启动基础设施（数据库 & 中间件）
+### 2. 配置 API 密钥
+
+创建环境配置文件：
 
 ```bash
 cd backend
+cp .env.example .env
+```
+
+编辑 `.env` 文件，填入你的 Google Gemini API Key：
+
+```bash
+# .env
+GEMINI_API_KEY=你的Gemini_API_Key
+AUTODM_ENABLED=true
+```
+
+获取免费的 Gemini API Key：https://aistudio.google.com/apikey
+
+> **注意**：API 密钥是启用 AI 自动说书人功能的必要配置。如果不配置，系统仍可运行但 AI Agent 功能将被禁用。
+
+### 3. 启动基础设施（数据库 & 中间件）
+
+```bash
 docker-compose up -d
 ```
 
@@ -344,7 +365,7 @@ docker-compose ps
 - `botc_rabbitmq` - RabbitMQ 3.12 (端口 5672, 管理界面 15672)
 - `botc_qdrant` - Qdrant 向量数据库 (端口 6333)
 
-### 3. 启动后端服务
+### 4. 启动后端服务
 
 ```bash
 # 在 backend 目录下
@@ -360,7 +381,7 @@ make dev
 
 后端服务启动在 `http://localhost:8080`
 
-### 4. 启动前端服务
+### 5. 启动前端服务
 
 新开一个终端：
 
@@ -372,46 +393,363 @@ npm run dev
 
 前端服务启动在 `http://localhost:8081`
 
-### 5. 访问应用
+### 6. 访问应用
 
-打开浏览器访问 `http://localhost:8081` 即可开始游戏！
+打开浏览器访问：
+- **游戏界面**：`http://localhost:8081`
+- **API 文档 (Swagger)**：`http://localhost:8080/swagger/index.html`
+- **Prometheus 监控**：`http://localhost:9190`
+- **Grafana 仪表盘**：`http://localhost:3100` (用户名: admin, 密码: admin)
+- **RabbitMQ 管理界面**：`http://localhost:15672` (用户名: botc, 密码: botc_password)
 
-### 环境变量配置（可选）
+---
 
-如需启用 AI Agent 功能，设置 Google Gemini API Key：
+## 本地开发环境
+
+### 环境变量说明
+
+| 变量名 | 说明 | 默认值 |
+|--------|------|--------|
+| `GEMINI_API_KEY` | Google Gemini API 密钥 | - |
+| `AUTODM_ENABLED` | 是否启用 AI 说书人 | `false` |
+| `HTTP_ADDR` | HTTP 服务监听地址 | `:8080` |
+| `DB_DSN` | MySQL 连接字符串 | `root:password@tcp(localhost:3316)/agentdm?...` |
+| `REDIS_ADDR` | Redis 地址 | `localhost:6389` |
+| `RABBITMQ_URL` | RabbitMQ 连接地址 | `amqp://botc:botc_password@localhost:5672/` |
+| `QDRANT_HOST` | Qdrant 向量数据库地址 | `localhost` |
+| `QDRANT_PORT` | Qdrant 端口 | `6333` |
+| `JWT_SECRET` | JWT 签名密钥 | `dev-secret-change` |
+
+### 开发模式启动
 
 ```bash
-export GEMINI_API_KEY=your-gemini-api-key
+# 方式一：使用 Makefile（推荐）
+cd backend
+make dev   # 自动启动 docker-compose + 后端服务
+
+# 方式二：手动启动
+cd backend
+docker-compose up -d          # 启动基础设施
+make build                    # 编译
+GEMINI_API_KEY=你的Key AUTODM_ENABLED=true ./bin/agentdm  # 运行
 ```
 
-获取免费的 Gemini API Key：https://aistudio.google.com/apikey
+### 测试 API 接口
+
+```bash
+# 健康检查
+curl http://localhost:8080/health
+
+# 注册用户
+curl -X POST http://localhost:8080/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"123456"}'
+
+# 登录获取 token
+curl -X POST http://localhost:8080/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"123456"}'
+
+# 创建房间（需要 token）
+curl -X POST http://localhost:8080/v1/rooms \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### 运行测试
+
+```bash
+cd backend
+make test      # 运行单元测试
+make lint      # 代码检查（需安装 golangci-lint）
+```
+
+---
+
+## 部署上云
+
+### 使用 Docker Compose 部署（推荐用于单机）
+
+#### 1. 准备服务器
+
+- 推荐配置：2 核 4GB 内存
+- 操作系统：Ubuntu 22.04 / Debian 12
+- 安装 Docker & Docker Compose
+
+```bash
+# 安装 Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+
+# 安装 Docker Compose
+sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
+```
+
+#### 2. 克隆代码并配置
+
+```bash
+git clone https://github.com/your-username/Blood-on-the-Clocktower-auto-dm.git
+cd Blood-on-the-Clocktower-auto-dm/backend
+
+# 创建生产环境配置
+cat > .env.production << EOF
+# 生产环境配置
+GEMINI_API_KEY=你的Gemini_API_Key
+AUTODM_ENABLED=true
+JWT_SECRET=$(openssl rand -hex 32)
+HTTP_ADDR=:8080
+EOF
+```
+
+#### 3. 创建生产环境 Docker Compose 配置
+
+```bash
+cat > docker-compose.production.yml << 'EOF'
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: botc_app
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.production
+    environment:
+      - DB_DSN=root:password@tcp(mysql:3306)/agentdm?parseTime=true&multiStatements=true&charset=utf8mb4
+      - REDIS_ADDR=redis:6379
+      - RABBITMQ_URL=amqp://botc:botc_password@rabbitmq:5672/
+      - QDRANT_HOST=qdrant
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: botc_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: agentdm
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: botc_redis
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: botc_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: botc
+      RABBITMQ_DEFAULT_PASS: botc_password
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: botc_qdrant
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: botc_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:
+  rabbitmq_data:
+  qdrant_data:
+EOF
+```
+
+#### 4. 创建 Dockerfile
+
+```bash
+cat > Dockerfile << 'EOF'
+FROM golang:1.21-alpine AS builder
+
+WORKDIR /app
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o /agentdm ./cmd/server
+
+FROM alpine:3.19
+RUN apk --no-cache add ca-certificates tzdata
+WORKDIR /app
+
+COPY --from=builder /agentdm .
+COPY assets/ ./assets/
+
+EXPOSE 8080
+CMD ["./agentdm"]
+EOF
+```
+
+#### 5. 构建并启动
+
+```bash
+# 构建前端
+cd ../frontend
+npm install && npm run build
+
+# 启动所有服务
+cd ../backend
+docker-compose -f docker-compose.production.yml up -d --build
+```
+
+### 使用 Kubernetes 部署（适用于生产集群）
+
+参考 `deploy/k8s/` 目录下的 Kubernetes 配置文件（如有）。
+
+### 监控与运维
+
+#### Prometheus 指标
+
+后端暴露了以下关键指标：
+
+- `botc_active_connections` - 当前 WebSocket 连接数
+- `botc_events_total` - 事件处理总数
+- `botc_command_duration_seconds` - 命令处理延迟
+- `botc_agent_run_total` - AI Agent 运行次数
+
+#### 日志查看
+
+```bash
+# 查看后端日志
+docker logs -f botc_app
+
+# 查看所有服务日志
+docker-compose -f docker-compose.production.yml logs -f
+```
+
+---
 
 ## API 文档
 
-### 房间操作
+后端启动后，访问 **Swagger UI** 查看完整 API 文档：
+
+```
+http://localhost:8080/swagger/index.html
+```
+
+### 主要接口概览
+
+| 接口 | 方法 | 描述 |
+|------|------|------|
+| `/health` | GET | 健康检查 |
+| `/v1/auth/register` | POST | 用户注册 |
+| `/v1/auth/login` | POST | 用户登录 |
+| `/v1/rooms` | POST | 创建房间 |
+| `/v1/rooms/{room_id}/join` | POST | 加入房间 |
+| `/v1/rooms/{room_id}/events` | GET | 获取事件流（支持 after_seq 增量同步） |
+| `/v1/rooms/{room_id}/state` | GET | 获取房间状态（按用户角色过滤） |
+| `/v1/rooms/{room_id}/replay` | GET | 游戏回放 |
+| `/ws?token={jwt}` | WebSocket | 实时通信 |
+| `/metrics` | GET | Prometheus 指标 |
+| `/swagger/*` | GET | API 文档 |
+
+### 示例请求
 
 ```bash
-# 创建房间
-curl -X POST http://localhost:8080/v1/rooms
+# 注册用户
+curl -X POST http://localhost:8080/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"123456"}'
 
-# 加入房间
-curl -X POST http://localhost:8080/v1/rooms/{room_id}/join
+# 登录获取 Token
+curl -X POST http://localhost:8080/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"123456"}'
 
-# 获取事件
-curl http://localhost:8080/v1/rooms/{room_id}/events?after_seq=0
+# 创建房间（需要 Authorization 头）
+curl -X POST http://localhost:8080/v1/rooms \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+
+# 获取事件（增量同步）
+curl http://localhost:8080/v1/rooms/{room_id}/events?after_seq=0 \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
 ### WebSocket 协议
 
-连接：`ws://localhost:8080/ws`
+连接：`ws://localhost:8080/ws?token={jwt}`
 
 ```json
-// 订阅房间
+// 订阅房间事件
 {"type": "subscribe", "request_id": "1", "payload": {"room_id": "xxx", "last_seq": 0}}
 
-// 发送命令
-{"type": "command", "request_id": "2", "payload": {"command_id": "xxx", "type": "public_chat", "data": {"message": "Hello"}}}
+// 发送游戏命令
+{"type": "command", "request_id": "2", "payload": {
+  "command_id": "uuid",
+  "idempotency_key": "unique-key",
+  "room_id": "xxx",
+  "type": "public_chat",
+  "data": {"message": "Hello"}
+}}
+
+// 服务端推送事件
+{"type": "event", "payload": {"room_id": "xxx", "seq": 1, "event_type": "public.chat", "data": {...}}}
 ```
+
+### 支持的命令类型
+
+| 命令类型 | 描述 | 游戏阶段 |
+|----------|------|----------|
+| `join` | 加入房间 | Lobby |
+| `leave` | 离开房间 | Lobby |
+| `claim_seat` | 选择座位 | Lobby |
+| `start_game` | 开始游戏 | Lobby |
+| `public_chat` | 公开聊天 | Any |
+| `whisper` | 私聊 | Day |
+| `nominate` | 提名玩家 | Day |
+| `end_defense` | 结束辩护 | Day |
+| `vote` | 投票 | Day |
+| `ability.use` | 使用技能 | Night |
+| `advance_phase` | 推进阶段 | DM Only |
 
 ## 开发指南
 

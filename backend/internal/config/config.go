@@ -26,11 +26,15 @@ type Config struct {
 	QdrantCollection string
 
 	// AutoDM configuration
-	AutoDMEnabled    bool
-	AutoDMLLMBaseURL string
-	AutoDMLLMAPIKey  string
-	AutoDMLLMModel   string
-	AutoDMLLMTimeout time.Duration
+	AutoDMEnabled     bool
+	AutoDMLLMProvider string // "openai" or "gemini"
+	AutoDMLLMBaseURL  string
+	AutoDMLLMAPIKey   string
+	AutoDMLLMModel    string
+	AutoDMLLMTimeout  time.Duration
+
+	// Google Gemini specific configuration
+	GeminiAPIKey string
 
 	// Game configuration
 	DefaultNominationTimeout  time.Duration
@@ -72,6 +76,22 @@ func getEnvBool(key string, def bool) bool {
 }
 
 func Load() Config {
+	// Determine LLM provider - prefer Gemini if key is set
+	geminiKey := getEnv("GEMINI_API_KEY", "")
+	openaiKey := getEnv("AUTODM_LLM_API_KEY", "")
+
+	provider := "openai"
+	apiKey := openaiKey
+	model := getEnv("AUTODM_LLM_MODEL", "gpt-4o")
+	baseURL := getEnv("AUTODM_LLM_BASE_URL", "https://api.openai.com/v1")
+
+	if geminiKey != "" {
+		provider = "gemini"
+		apiKey = geminiKey
+		model = getEnv("AUTODM_LLM_MODEL", "gemini-2.0-flash")
+		baseURL = "https://generativelanguage.googleapis.com/v1beta"
+	}
+
 	return Config{
 		HTTPAddr:          getEnv("HTTP_ADDR", ":8080"),
 		WSReadBufferSize:  getEnvInt("WS_READ_BUFFER", 4096),
@@ -92,11 +112,15 @@ func Load() Config {
 		QdrantCollection: getEnv("QDRANT_COLLECTION", "botc_rules"),
 
 		// AutoDM: AI Storyteller configuration
-		AutoDMEnabled:    getEnvBool("AUTODM_ENABLED", false),
-		AutoDMLLMBaseURL: getEnv("AUTODM_LLM_BASE_URL", "https://api.openai.com/v1"),
-		AutoDMLLMAPIKey:  getEnv("AUTODM_LLM_API_KEY", ""),
-		AutoDMLLMModel:   getEnv("AUTODM_LLM_MODEL", "gpt-4o"),
-		AutoDMLLMTimeout: time.Duration(getEnvInt("AUTODM_LLM_TIMEOUT_SEC", 60)) * time.Second,
+		AutoDMEnabled:     getEnvBool("AUTODM_ENABLED", false),
+		AutoDMLLMProvider: provider,
+		AutoDMLLMBaseURL:  baseURL,
+		AutoDMLLMAPIKey:   apiKey,
+		AutoDMLLMModel:    model,
+		AutoDMLLMTimeout:  time.Duration(getEnvInt("AUTODM_LLM_TIMEOUT_SEC", 60)) * time.Second,
+
+		// Google Gemini specific
+		GeminiAPIKey: geminiKey,
 
 		// Game timing configuration
 		DefaultNominationTimeout:  time.Duration(getEnvInt("NOMINATION_TIMEOUT_SEC", 10)) * time.Second,

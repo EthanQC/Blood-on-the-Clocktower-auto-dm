@@ -58,10 +58,17 @@ func TestReduceJoin(t *testing.T) {
 func TestReduceGameStartedPhaseDayNight(t *testing.T) {
 	s := NewState("room1")
 	s.Reduce(EventPayload{Seq: 1, Type: "game.started", Actor: "system", Payload: nil})
+	// Game starts in first_night phase according to Blood on the Clocktower rules
+	s.Reduce(EventPayload{Seq: 2, Type: "phase.first_night", Actor: "system", Payload: nil})
+	if s.Phase != PhaseFirstNight {
+		t.Errorf("expected first_night phase, got %s", s.Phase)
+	}
+	// Transition to day after first night
+	s.Reduce(EventPayload{Seq: 3, Type: "phase.day", Actor: "system", Payload: nil})
 	if s.Phase != PhaseDay {
 		t.Errorf("expected day phase, got %s", s.Phase)
 	}
-	s.Reduce(EventPayload{Seq: 2, Type: "phase.night", Actor: "system", Payload: nil})
+	s.Reduce(EventPayload{Seq: 4, Type: "phase.night", Actor: "system", Payload: nil})
 	if s.Phase != PhaseNight {
 		t.Errorf("expected night phase, got %s", s.Phase)
 	}
@@ -69,10 +76,12 @@ func TestReduceGameStartedPhaseDayNight(t *testing.T) {
 
 func TestVoteResolution(t *testing.T) {
 	s := NewState("room1")
-	s.Players["a"] = Player{UserID: "a", Alive: true}
-	s.Players["b"] = Player{UserID: "b", Alive: true}
-	s.Players["c"] = Player{UserID: "c", Alive: true}
+	s.Players["a"] = Player{UserID: "a", Alive: true, SeatNumber: 1}
+	s.Players["b"] = Player{UserID: "b", Alive: true, SeatNumber: 2}
+	s.Players["c"] = Player{UserID: "c", Alive: true, SeatNumber: 3}
 	s.Phase = PhaseDay
+
+	// First create a nomination
 	cmd := types.CommandEnvelope{
 		CommandID:   uuid.NewString(),
 		RoomID:      "room1",
@@ -87,6 +96,10 @@ func TestVoteResolution(t *testing.T) {
 	for _, e := range events {
 		s.Reduce(toEventPayload(e))
 	}
+
+	// Transition to voting phase (defense ends)
+	s.SubPhase = SubPhaseVoting
+
 	voteCmd := types.CommandEnvelope{
 		CommandID:   uuid.NewString(),
 		RoomID:      "room1",
@@ -101,7 +114,7 @@ func TestVoteResolution(t *testing.T) {
 	for _, e := range events {
 		s.Reduce(toEventPayload(e))
 	}
-	// Second vote to reach majority (2/3)
+	// Second vote (player c votes yes)
 	voteCmd2 := types.CommandEnvelope{
 		CommandID:   uuid.NewString(),
 		RoomID:      "room1",
@@ -113,6 +126,24 @@ func TestVoteResolution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("vote2 failed: %v", err)
 	}
+	for _, e := range events {
+		s.Reduce(toEventPayload(e))
+	}
+
+	// Third vote (nominee also needs to vote for all-voted check)
+	// In Blood on the Clocktower, the nominee can also vote
+	voteCmd3 := types.CommandEnvelope{
+		CommandID:   uuid.NewString(),
+		RoomID:      "room1",
+		Type:        "vote",
+		ActorUserID: "b",
+		Payload:     []byte(`{"vote":"no"}`),
+	}
+	events, _, err = HandleCommand(s, voteCmd3)
+	if err != nil {
+		t.Fatalf("vote3 failed: %v", err)
+	}
+
 	resolved := false
 	for _, e := range events {
 		if e.EventType == "execution.resolved" {
@@ -120,7 +151,7 @@ func TestVoteResolution(t *testing.T) {
 		}
 	}
 	if !resolved {
-		t.Fatalf("expected execution resolved with majority vote")
+		t.Fatalf("expected execution resolved with majority vote (2 yes out of 3 players, threshold is 2)")
 	}
 }
 
