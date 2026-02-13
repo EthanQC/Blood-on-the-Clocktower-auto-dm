@@ -36,12 +36,16 @@ func HandleCommand(state State, cmd types.CommandEnvelope) ([]types.Event, *type
 		return handleLeave(state, cmd)
 	case "claim_seat":
 		return handleClaimSeat(state, cmd)
+	case "room_settings":
+		return handleRoomSettings(state, cmd)
 	case "start_game":
 		return handleStartGame(state, cmd)
 	case "public_chat":
 		return handlePublicChat(state, cmd)
 	case "whisper":
 		return handleWhisper(state, cmd)
+	case "evil_team_chat":
+		return handleEvilTeamChat(state, cmd)
 	case "nominate":
 		return handleNomination(state, cmd)
 	case "end_defense":
@@ -112,6 +116,34 @@ func handleClaimSeat(state State, cmd types.CommandEnvelope) ([]types.Event, *ty
 	}
 
 	return []types.Event{newEvent(cmd, "seat.claimed", map[string]string{"seat_number": seatNum})}, acceptedResult(cmd.CommandID), nil
+}
+
+func handleRoomSettings(state State, cmd types.CommandEnvelope) ([]types.Event, *types.CommandResult, error) {
+	if state.Phase != PhaseLobby {
+		return nil, nil, fmt.Errorf("cannot change settings after game started")
+	}
+
+	// Only the room creator (DM) can change settings
+	// Check if the actor is the DM
+	if p, ok := state.Players[cmd.ActorUserID]; ok && !p.IsDM {
+		// Also check if they're the first player (host)
+		if len(state.SeatOrder) > 0 && state.SeatOrder[0] != cmd.ActorUserID {
+			return nil, nil, fmt.Errorf("only the host can change room settings")
+		}
+	}
+
+	var payload map[string]string
+	_ = json.Unmarshal(cmd.Payload, &payload)
+
+	eventPayload := map[string]string{}
+	if ed, ok := payload["edition"]; ok {
+		eventPayload["edition"] = ed
+	}
+	if mp, ok := payload["max_players"]; ok {
+		eventPayload["max_players"] = mp
+	}
+
+	return []types.Event{newEvent(cmd, "room.settings.changed", eventPayload)}, acceptedResult(cmd.CommandID), nil
 }
 
 func handleStartGame(state State, cmd types.CommandEnvelope) ([]types.Event, *types.CommandResult, error) {
@@ -211,7 +243,17 @@ func handlePublicChat(state State, cmd types.CommandEnvelope) ([]types.Event, *t
 
 	player := state.Players[cmd.ActorUserID]
 	payload["sender_name"] = player.Name
-	payload["sender_seat"] = fmt.Sprintf("%d", player.SeatNumber)
+	if payload["sender_name"] == "" {
+		// Fallback to ActorUserID if player not found in state (e.g. guest or DM)
+		payload["sender_name"] = cmd.ActorUserID
+		// Try to fix guest seat number
+		if player.SeatNumber == 0 {
+			// Find max seat? Or just leave as 0 (spectator)
+			payload["sender_seat"] = "0"
+		}
+	} else {
+		payload["sender_seat"] = fmt.Sprintf("%d", player.SeatNumber)
+	}
 
 	return []types.Event{newEvent(cmd, "public.chat", payload)}, acceptedResult(cmd.CommandID), nil
 }
@@ -231,6 +273,27 @@ func handleWhisper(state State, cmd types.CommandEnvelope) ([]types.Event, *type
 	payload["sender_seat"] = fmt.Sprintf("%d", sender.SeatNumber)
 
 	return []types.Event{newEvent(cmd, "whisper.sent", payload)}, acceptedResult(cmd.CommandID), nil
+}
+
+func handleEvilTeamChat(state State, cmd types.CommandEnvelope) ([]types.Event, *types.CommandResult, error) {
+	player, ok := state.Players[cmd.ActorUserID]
+	if !ok {
+		return nil, nil, fmt.Errorf("player not found")
+	}
+	if player.Team != "evil" {
+		return nil, nil, fmt.Errorf("only evil players can use evil team chat")
+	}
+
+	var payload map[string]string
+	_ = json.Unmarshal(cmd.Payload, &payload)
+	if payload == nil || payload["message"] == "" {
+		return nil, nil, fmt.Errorf("message required")
+	}
+
+	payload["sender_name"] = player.Name
+	payload["sender_seat"] = fmt.Sprintf("%d", player.SeatNumber)
+
+	return []types.Event{newEvent(cmd, "evil_team.chat", payload)}, acceptedResult(cmd.CommandID), nil
 }
 
 func handleNomination(state State, cmd types.CommandEnvelope) ([]types.Event, *types.CommandResult, error) {
@@ -530,6 +593,30 @@ func handleAbility(state State, cmd types.CommandEnvelope) ([]types.Event, *type
 		"result":  result.Message,
 	}))
 
+	// Log AI decision for post-game review
+	trueResultStr := ""
+	givenResultStr := result.Message
+	if result.TrueResult != nil {
+		trueBytes, _ := json.Marshal(result.TrueResult)
+		trueResultStr = string(trueBytes)
+	}
+	if result.FakeResult != nil {
+		fakeBytes, _ := json.Marshal(result.FakeResult)
+		givenResultStr = string(fakeBytes)
+	}
+	events = append(events, newEvent(cmd, "ai.decision", map[string]string{
+		"night":        fmt.Sprintf("%d", state.NightCount),
+		"user_id":      cmd.ActorUserID,
+		"player_name":  player.Name,
+		"role":         player.TrueRole,
+		"targets":      string(targetsJSON),
+		"true_result":  trueResultStr,
+		"given_result": givenResultStr,
+		"is_poisoned":  fmt.Sprintf("%v", result.IsPoisoned),
+		"is_drunk":     fmt.Sprintf("%v", result.IsDrunk),
+		"timestamp":    fmt.Sprintf("%d", time.Now().UnixMilli()),
+	}))
+
 	return events, acceptedResult(cmd.CommandID), nil
 }
 
@@ -689,7 +776,7 @@ func checkWinCondition(state State, cmd types.CommandEnvelope) []types.Event {
 		// Find a living Scarlet Woman
 		for uid, p := range stateCopy.Players {
 			if p.TrueRole == "scarlet_woman" && p.Alive {
-				// We also check alive count >= 5 to be safe, though CheckWinCondition 
+				// We also check alive count >= 5 to be safe, though CheckWinCondition
 				// already implicitly checked this by returning ended=false.
 				if stateCopy.GetAliveCount() >= 5 {
 					return []types.Event{

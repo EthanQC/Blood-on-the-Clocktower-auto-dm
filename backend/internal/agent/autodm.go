@@ -54,6 +54,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
@@ -325,18 +326,29 @@ type Nomination struct {
 // OnEvent is called by RoomActor when game events occur.
 // It processes the event and generates appropriate responses.
 func (a *AutoDM) OnEvent(ctx context.Context, ev types.Event, state interface{}) {
+	fmt.Printf("[AutoDM] DEBUG: OnEvent Triggered: %s (Actor: %s)\n", ev.EventType, ev.ActorUserID)
 	if !a.Enabled() {
+		fmt.Println("[AutoDM] DEBUG: AutoDM is disabled")
 		return
 	}
 	if (ev.ActorUserID == "autodm" || ev.ActorUserID == "auto-dm") &&
 		(ev.EventType == "public.chat" || ev.EventType == "whisper.sent") {
 		return
 	}
+
+	// Skip non-game events that don't need AI narration
+	switch ev.EventType {
+	case "player.joined", "player.left", "seat.claimed", "room.settings.changed":
+		return
+	}
+
 	a.updateGameStateFromEngineState(state)
 
 	if a.publishAsyncTask(ctx, ev) {
+		fmt.Println("[AutoDM] DEBUG: Processing Async")
 		return
 	}
+	fmt.Println("[AutoDM] DEBUG: Processing Inline")
 	if err := a.ProcessQueuedEvent(ctx, ev); err != nil {
 		a.logger.Error("AutoDM failed to process event", "error", err, "event_type", ev.EventType)
 	}
@@ -350,6 +362,11 @@ func (a *AutoDM) ProcessQueuedEvent(ctx context.Context, ev types.Event) error {
 	}
 
 	event := a.convertEvent(ev)
+	a.logger.Info("AutoDM processing event",
+		"type", event.Type,
+		"description", event.Description,
+		"enabled", a.Enabled())
+
 	a.injectRuleContext(ctx, &event)
 
 	processCtx, cancel := context.WithTimeout(ctx, a.eventTimeout)
@@ -522,6 +539,20 @@ func formatEventDescription(eventType string, data map[string]interface{}) strin
 		return "The game has started"
 	case "game.ended":
 		return "The game has ended"
+	case "public.chat":
+		sender, _ := data["sender_name"].(string)
+		msg, _ := data["message"].(string)
+		if sender == "" {
+			sender = "Player"
+		}
+		return fmt.Sprintf("%s says: %s", sender, msg)
+	case "whisper.sent":
+		sender, _ := data["sender_name"].(string)
+		msg, _ := data["message"].(string)
+		if sender == "" {
+			sender = "Player"
+		}
+		return fmt.Sprintf("%s whispers to DM: %s", sender, msg)
 	default:
 		return eventType
 	}
@@ -572,7 +603,7 @@ func (a *AutoDM) sendMessage(ctx context.Context, roomID, message string) {
 }
 
 func generateCommandID() string {
-	return "autodm-" + uuid.NewString()
+	return uuid.NewString()
 }
 
 func defaultMessageForEvent(eventType string) string {
