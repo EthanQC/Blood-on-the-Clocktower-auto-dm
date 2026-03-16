@@ -51,4 +51,24 @@ Original prompt: 拉取远程最新更改到本地，读取近期更改，读取
     - 投票结算后房主可再次进入夜晚
     - 浏览器控制台无错误
 - 当前状态：
-  - 已无已知阻塞，可进入提交与推送阶段。
+- 已无已知阻塞，可进入提交与推送阶段。
+
+2026-03-16 reusable regression automation
+- 已把本轮人工验证固化为仓库内脚本 `frontend/scripts/e2e_room_flow.cjs`，并新增命令：
+  - `cd frontend && npm run e2e:room-flow`
+- 脚本能力：
+  - 若本地 `8080/8081` 无服务，会自动启动后端与前端
+  - 若 Docker 依赖未就绪，会自动执行 `docker compose up -d mysql redis rabbitmq qdrant`
+  - 覆盖完整真实链路：建房、补 6 个 bot、开局、首夜、白天重连恢复、提名、双阶段辩护、顺序投票、再次入夜
+  - 产出报告、截图和前后端日志到 `tmp/e2e-room-flow/`
+- 已新增前端 `playwright` devDependency，并在 `README.md` 补充本地运行说明。
+- 已新增 GitHub Actions workflow：
+  - `.github/workflows/room-flow-regression.yml`
+  - 会在 PR / main push 上执行 `go test ./internal/bot ./internal/engine`、`npm run lint-ci`、`npm run e2e:room-flow`
+  - 会上传 `tmp/e2e-room-flow/` 作为 CI 产物，便于失败排查
+- 已本地验证：
+  - `cd frontend && npm run e2e:room-flow` 通过
+  - 统一 skill client `web_game_playwright_client.js` 冒烟检查通过，截图产物已人工查看
+- 后续最值得继续做的项：
+  - 再补一条“整局直到结算页”的浏览器回归，覆盖胜负判定与 recap 页面
+  - 将夜晚阶段的角色结果也结构化写入可断言的 `report.json`，减少只靠截图排查
