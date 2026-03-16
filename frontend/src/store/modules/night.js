@@ -99,16 +99,13 @@ const mutations = {
     state.selectedTargets = [];
   },
   showRoleReveal(state) {
-    console.log('[night/showRoleReveal] current step:', state.step);
     if (state.step === 'idle') {
       state.step = 'role_reveal';
     }
   },
   /** Queue a night prompt; only wake if already sleeping */
   queuePrompt(state, data) {
-    console.log('[night/queuePrompt] current step:', state.step, 'data:', data.roleId, data.actionType);
     if (state.step === 'sleeping') {
-      console.log('[night/queuePrompt] already sleeping → waking immediately');
       state.isMyTurn = true;
       state.step = 'woken';
       state.roleId = data.roleId || '';
@@ -120,13 +117,11 @@ const mutations = {
       state.result = '';
       state.pendingPrompt = null;
     } else {
-      console.log('[night/queuePrompt] step is', state.step, '→ storing as pendingPrompt');
       state.pendingPrompt = data;
     }
   },
   /** Consume queued prompt when entering sleeping */
   consumePendingPrompt(state) {
-    console.log('[night/consumePendingPrompt] pendingPrompt:', !!state.pendingPrompt, 'step:', state.step);
     if (state.pendingPrompt && state.step === 'sleeping') {
       const p = state.pendingPrompt;
       state.pendingPrompt = null;
@@ -139,7 +134,6 @@ const mutations = {
       state.targets = p.targets || [];
       state.selectedTargets = [];
       state.result = '';
-      console.log('[night/consumePendingPrompt] woke up as', p.roleId);
     }
   },
   reset(state) {

@@ -30,8 +30,11 @@ const (
 )
 
 var (
-	botDefenseDelayMinMs = 1000
-	botDefenseDelayMaxMs = 3000
+	botDefenseDelayMinMs    = 1000
+	botDefenseDelayMaxMs    = 3000
+	botNominationDelayMinMs = 3000
+	botNominationDelayMaxMs = 8000
+	botRandomChance         = randomChance
 )
 
 // BotConfig configures a bot player.
@@ -68,6 +71,11 @@ type Bot struct {
 	lastNominator string
 	lastNominee   string
 	lastVoteOrder []string // sequential user_id order from vote_order seats
+	knownPlayers  map[string]knownPlayer
+}
+
+type knownPlayer struct {
+	Alive bool
 }
 
 // CommandDispatcher sends commands to the game engine.
@@ -89,6 +97,9 @@ func NewBot(cfg BotConfig) *Bot {
 		personality: cfg.Personality,
 		logger:      cfg.Logger,
 		alive:       true,
+		knownPlayers: map[string]knownPlayer{
+			cfg.UserID: {Alive: true},
+		},
 	}
 }
 
@@ -118,6 +129,12 @@ func (b *Bot) OnEvent(ctx context.Context, ev types.Event) {
 	}
 
 	switch ev.EventType {
+	case "player.joined":
+		b.knownPlayers[ev.ActorUserID] = knownPlayer{Alive: true}
+
+	case "player.left":
+		delete(b.knownPlayers, ev.ActorUserID)
+
 	case "role.assigned":
 		if payload["user_id"] == b.userID {
 			b.role = payload["role"]
@@ -186,7 +203,12 @@ func (b *Bot) OnEvent(ctx context.Context, ev types.Event) {
 			go b.handleNightActionPrompt(ctx, payload)
 		}
 
-	case "player.died":
+	case "player.died", "player.executed":
+		if deadUserID := payload["user_id"]; deadUserID != "" {
+			player := b.knownPlayers[deadUserID]
+			player.Alive = false
+			b.knownPlayers[deadUserID] = player
+		}
 		if payload["user_id"] == b.userID {
 			b.alive = false
 			b.logger.Info("bot died", "bot", b.name, "cause", payload["cause"])
@@ -304,7 +326,7 @@ func (b *Bot) maybeEndDefenseAfterDelay(ctx context.Context) {
 }
 
 func (b *Bot) maybeNominateAfterDelay(ctx context.Context) {
-	delay := randomDuration(3000, 8000)
+	delay := randomDuration(botNominationDelayMinMs, botNominationDelayMaxMs)
 	select {
 	case <-time.After(delay):
 	case <-ctx.Done():
@@ -315,9 +337,11 @@ func (b *Bot) maybeNominateAfterDelay(ctx context.Context) {
 	alive := b.alive
 	dispatcher := b.dispatcher
 	personality := b.personality
+	roomID := b.roomID
+	targets := b.nominationTargetsLocked()
 	b.mu.RUnlock()
 
-	if !alive || dispatcher == nil {
+	if !alive || dispatcher == nil || len(targets) == 0 {
 		return
 	}
 
@@ -325,22 +349,32 @@ func (b *Bot) maybeNominateAfterDelay(ctx context.Context) {
 	shouldNominate := false
 	switch personality {
 	case PersonalityAggressive:
-		shouldNominate = randomChance(70)
+		shouldNominate = botRandomChance(70)
 	case PersonalityCautious:
-		shouldNominate = randomChance(20)
+		shouldNominate = botRandomChance(20)
 	case PersonalityRandom:
-		shouldNominate = randomChance(40)
+		shouldNominate = botRandomChance(40)
 	case PersonalitySmart:
-		shouldNominate = randomChance(50)
+		shouldNominate = botRandomChance(50)
 	}
 
 	if !shouldNominate {
 		return
 	}
 
-	// Bot doesn't know other players' IDs directly - nomination needs a target
-	// This will be handled by the bot manager which has game state access
-	b.logger.Debug("bot wants to nominate", "bot", b.name)
+	nominee := targets[randomInt(len(targets))]
+	cmdPayload, _ := json.Marshal(map[string]string{
+		"nominee": nominee,
+	})
+	if err := dispatcher.DispatchAsync(types.CommandEnvelope{
+		CommandID:   fmt.Sprintf("bot-%s-nominate-%d", b.userID, time.Now().UnixMilli()),
+		RoomID:      roomID,
+		Type:        "nominate",
+		ActorUserID: b.userID,
+		Payload:     cmdPayload,
+	}); err != nil {
+		b.logger.Warn("bot nomination failed", "bot", b.name, "error", err)
+	}
 }
 
 func (b *Bot) maybeVoteAfterDelay(ctx context.Context, nominee string) {
@@ -395,6 +429,17 @@ func (b *Bot) maybeVoteAfterDelay(ctx context.Context, nominee string) {
 		b.logger.Debug("bot vote rejected, will retry",
 			"bot", b.name, "attempt", attempt+1, "error", err)
 	}
+}
+
+func (b *Bot) nominationTargetsLocked() []string {
+	targets := make([]string, 0, len(b.knownPlayers))
+	for userID, player := range b.knownPlayers {
+		if userID == b.userID || !player.Alive {
+			continue
+		}
+		targets = append(targets, userID)
+	}
+	return targets
 }
 
 func (b *Bot) decideVote(personality Personality, team, nominee string) bool {

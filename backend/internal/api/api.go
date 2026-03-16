@@ -280,7 +280,7 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db error", http.StatusInternalServerError)
 		return
 	}
-	_ = s.store.AddRoomMember(r.Context(), store.RoomMember{RoomID: rm.ID, UserID: userID, Role: "dm", Joined: time.Now().UTC()})
+	_ = s.store.AddRoomMember(r.Context(), store.RoomMember{RoomID: rm.ID, UserID: userID, Role: "player", Joined: time.Now().UTC()})
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(CreateRoomResponse{RoomID: rm.ID})
 }
@@ -336,9 +336,19 @@ func (s *Server) fetchEvents(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	events, _ := s.store.LoadEventsAfter(r.Context(), roomID, afterSeq, 200)
+	baseState, err := s.rebuildRoomState(r.Context(), roomID, afterSeq)
+	if err != nil {
+		http.Error(w, "room error", http.StatusInternalServerError)
+		return
+	}
+	events, err := s.store.LoadEventsAfter(r.Context(), roomID, afterSeq, 200)
+	if err != nil {
+		http.Error(w, "room error", http.StatusInternalServerError)
+		return
+	}
+	projected := projection.ProjectEventStream(baseState, storedEventsToEvents(events), userID)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(events)
+	json.NewEncoder(w).Encode(projected)
 }
 
 // fetchState godoc
@@ -356,7 +366,7 @@ func (s *Server) fetchEvents(w http.ResponseWriter, r *http.Request) {
 func (s *Server) fetchState(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value(userIDKey).(string)
 	roomID := chi.URLParam(r, "room_id")
-	ok, role, _ := s.store.IsMember(r.Context(), roomID, userID)
+	ok, _, _ := s.store.IsMember(r.Context(), roomID, userID)
 	if !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
@@ -367,7 +377,7 @@ func (s *Server) fetchState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := ra.GetState()
-	viewer := types.Viewer{UserID: userID, IsDM: role == "dm"}
+	viewer := projection.ViewerForState(state, userID)
 	projected := projection.ProjectedState(state, viewer)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(projected)
@@ -394,26 +404,64 @@ func (s *Server) replay(w http.ResponseWriter, r *http.Request) {
 		toSeq, _ = strconv.ParseInt(q, 10, 64)
 	}
 	viewerParam := r.URL.Query().Get("viewer")
-	ok, role, _ := s.store.IsMember(r.Context(), roomID, userID)
+	ok, _, _ := s.store.IsMember(r.Context(), roomID, userID)
 	if !ok {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	isDM := role == "dm"
+	state, err := s.rebuildRoomState(r.Context(), roomID, toSeq)
+	if err != nil {
+		http.Error(w, "room error", http.StatusInternalServerError)
+		return
+	}
+	requesterViewer := projection.ViewerForState(state, userID)
+	isDM := requesterViewer.IsDM
 	if !isDM || viewerParam == "" {
 		viewerParam = userID
 	}
-	events, _ := s.store.LoadEventsUpTo(r.Context(), roomID, toSeq)
-	state := engine.NewState(roomID)
-	for _, e := range events {
-		var p map[string]string
-		_ = json.Unmarshal([]byte(e.PayloadJSON), &p)
-		state.Reduce(engine.EventPayload{Seq: e.Seq, Type: e.EventType, Actor: e.ActorUserID, Payload: p})
-	}
-	viewer := types.Viewer{UserID: viewerParam, IsDM: isDM}
+	viewer := projection.ViewerForState(state, viewerParam)
+	viewer.IsDM = isDM
 	projected := projection.ProjectedState(state, viewer)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(projected)
+}
+
+func (s *Server) rebuildRoomState(ctx context.Context, roomID string, toSeq int64) (engine.State, error) {
+	events, err := s.store.LoadEventsUpTo(ctx, roomID, toSeq)
+	if err != nil {
+		return engine.State{}, err
+	}
+
+	state := engine.NewState(roomID)
+	for _, e := range events {
+		var payload map[string]string
+		_ = json.Unmarshal([]byte(e.PayloadJSON), &payload)
+		state.Reduce(engine.EventPayload{
+			Seq:     e.Seq,
+			Type:    e.EventType,
+			Actor:   e.ActorUserID,
+			Payload: payload,
+		})
+	}
+
+	return state, nil
+}
+
+func storedEventsToEvents(events []store.StoredEvent) []types.Event {
+	res := make([]types.Event, 0, len(events))
+	for _, e := range events {
+		res = append(res, types.Event{
+			RoomID:            e.RoomID,
+			Seq:               e.Seq,
+			EventID:           e.EventID,
+			EventType:         e.EventType,
+			ActorUserID:       e.ActorUserID,
+			CausationCommand:  e.CausationCommand,
+			Payload:           json.RawMessage(e.PayloadJSON),
+			ServerTimestampMs: e.ServerTime.UnixMilli(),
+		})
+	}
+	return res
 }
 
 // ServerOption configures optional Server settings.

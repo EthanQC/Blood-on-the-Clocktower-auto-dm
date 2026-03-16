@@ -55,6 +55,27 @@ func withFastBotDefenseDelay(t *testing.T) {
 	})
 }
 
+func withFastBotNominationDelay(t *testing.T) {
+	t.Helper()
+	oldMin := botNominationDelayMinMs
+	oldMax := botNominationDelayMaxMs
+	botNominationDelayMinMs = 1
+	botNominationDelayMaxMs = 2
+	t.Cleanup(func() {
+		botNominationDelayMinMs = oldMin
+		botNominationDelayMaxMs = oldMax
+	})
+}
+
+func withDeterministicNominationChance(t *testing.T, shouldNominate bool) {
+	t.Helper()
+	oldFn := botRandomChance
+	botRandomChance = func(int) bool { return shouldNominate }
+	t.Cleanup(func() {
+		botRandomChance = oldFn
+	})
+}
+
 func newSilentLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
@@ -124,5 +145,48 @@ func TestBotEndsDefenseWhenBotIsNomineeAfterNominatorProgress(t *testing.T) {
 	}
 	if cmd.ActorUserID != "bot-b" {
 		t.Fatalf("expected bot-b to end defense, got %s", cmd.ActorUserID)
+	}
+}
+
+func TestBotNominatesKnownAlivePlayer(t *testing.T) {
+	withFastBotNominationDelay(t)
+	withDeterministicNominationChance(t, true)
+
+	dispatcher := newTestDispatcher()
+	b := NewBot(BotConfig{
+		UserID:      "bot-a",
+		Name:        "Alice",
+		Personality: PersonalityAggressive,
+		Logger:      newSilentLogger(),
+	})
+	b.SetDispatcher(dispatcher, "room-1")
+
+	for _, userID := range []string{"bot-a", "human-b", "human-c"} {
+		b.OnEvent(context.Background(), types.Event{
+			EventType:   "player.joined",
+			ActorUserID: userID,
+			Payload:     json.RawMessage(`{}`),
+		})
+	}
+
+	b.OnEvent(context.Background(), types.Event{
+		EventType: "phase.nomination",
+		Payload:   json.RawMessage(`{}`),
+	})
+
+	cmd := waitForBotCommand(t, dispatcher.ch)
+	if cmd.Type != "nominate" {
+		t.Fatalf("expected nominate, got %s", cmd.Type)
+	}
+	if cmd.ActorUserID != "bot-a" {
+		t.Fatalf("expected bot-a to nominate, got %s", cmd.ActorUserID)
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(cmd.Payload, &payload); err != nil {
+		t.Fatalf("failed to decode nomination payload: %v", err)
+	}
+	if payload["nominee"] == "" || payload["nominee"] == "bot-a" {
+		t.Fatalf("expected bot to nominate another alive player, got %+v", payload)
 	}
 }

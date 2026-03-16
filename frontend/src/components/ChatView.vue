@@ -30,6 +30,7 @@
         <span class="chat-view__badge" v-if="channels.evil.unread">{{ channels.evil.unread }}</span>
       </button>
       <button
+        v-if="assistantAvailable"
         class="chat-view__tab assistant"
         :class="{ active: activeChannel === 'assistant' }"
         @click="switchChannel('assistant')"
@@ -127,7 +128,7 @@ export default {
   },
   computed: {
     ...mapState("chat", ["channels", "activeChannel", "activeWhisperTarget", "assistantLoading"]),
-    ...mapState(["roomId", "seatIndex"]),
+    ...mapState(["roomId", "seatIndex", "assistantAvailable"]),
     ...mapState("players", ["players", "myRole"]),
     ...mapGetters("chat", ["activeMessages", "hasEvilChannel"]),
     messages() {
@@ -154,11 +155,23 @@ export default {
     },
     activeWhisperTarget(val) {
       this.whisperTarget = val;
+    },
+    assistantAvailable(val) {
+      if (!val && this.activeChannel === 'assistant') {
+        this.switchChannel('public');
+      }
     }
+  },
+  created() {
+    if (!this.assistantAvailable && this.activeChannel === 'assistant') {
+      this.switchChannel('public');
+    }
+    this.$store.dispatch('refreshAssistantAvailability');
   },
   methods: {
     ...mapActions(['askAssistant']),
     switchChannel(channel) {
+      if (channel === 'assistant' && !this.assistantAvailable) return;
       this.$store.commit("chat/setActiveChannel", channel);
     },
     onWhisperTargetChange() {
@@ -179,6 +192,14 @@ export default {
       }
     },
     async sendAssistantMessage(text) {
+      if (!this.assistantAvailable) {
+        this.$store.commit("chat/addAssistantMessage", {
+          text: this.$t('errors.assistantUnavailable'),
+          isSystem: true,
+          seatIndex: -1
+        });
+        return;
+      }
       // Add user message locally
       this.$store.commit("chat/addAssistantMessage", {
         text,

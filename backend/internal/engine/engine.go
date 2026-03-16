@@ -146,7 +146,11 @@ func handleRoomSettings(state State, cmd types.CommandEnvelope) ([]types.Event, 
 
 	eventPayload := map[string]string{}
 	if ed, ok := payload["edition"]; ok {
-		eventPayload["edition"] = ed
+		edition, err := game.NormalizeEdition(ed)
+		if err != nil {
+			return nil, nil, err
+		}
+		eventPayload["edition"] = string(edition)
 	}
 	if mp, ok := payload["max_players"]; ok {
 		eventPayload["max_players"] = mp
@@ -183,6 +187,10 @@ func handleStartGame(state State, cmd types.CommandEnvelope) ([]types.Event, *ty
 	// Parse optional custom_roles from payload (injected by AI Composer)
 	var payload map[string]string
 	_ = json.Unmarshal(cmd.Payload, &payload)
+	edition, err := game.NormalizeEdition(state.Edition)
+	if err != nil {
+		return nil, nil, err
+	}
 	var customRoles []string
 	if cr, ok := payload["custom_roles"]; ok && cr != "" {
 		_ = json.Unmarshal([]byte(cr), &customRoles)
@@ -191,7 +199,7 @@ func handleStartGame(state State, cmd types.CommandEnvelope) ([]types.Event, *ty
 	// Use SetupAgent to assign roles
 	setupConfig := game.SetupConfig{
 		PlayerCount: playerCount,
-		Edition:     state.Edition,
+		Edition:     string(edition),
 		CustomRoles: customRoles,
 	}
 	setupAgent := game.NewSetupAgent(setupConfig)

@@ -90,9 +90,6 @@
         <div class="vote-overlay__waiting" v-else-if="!result">
           <p v-if="currentVoterSeatIndex > 0">{{ $t('vote.waitingForVoter', { n: currentVoterSeatIndex }) }}</p>
           <p v-else>{{ $t('vote.waiting') }}</p>
-          <p class="vote-overlay__debug-info">
-            [调试] 你的座位: {{ mySeatDebug }} | 当前投票者: {{ currentVoterSeatIndex }} | 阶段: {{ subPhase }}
-          </p>
         </div>
 
         <!-- Vote result -->
@@ -139,9 +136,6 @@ export default {
     },
     currentVoterSeat() {
       return this.currentVoterSeatIndex;
-    },
-    mySeatDebug() {
-      return this.$store.state.seatIndex;
     },
     mePlayer() {
       return this.$store.state.players.players.find(player => player.isMe) || null;

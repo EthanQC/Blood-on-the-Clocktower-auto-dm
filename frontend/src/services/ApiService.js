@@ -150,6 +150,19 @@ class ApiService {
   }
 
   /**
+   * Get current LLM / assistant health and availability.
+   * Backend: GET /v1/llm/health
+   */
+  async getLLMHealth() {
+    const response = await fetch(`${API_BASE}/v1/llm/health`);
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`LLM health failed: ${text}`);
+    }
+    return response.json();
+  }
+
+  /**
    * Ask the AI assistant.
    * Backend: POST /v1/rooms/{room_id}/assistant (may or may not exist yet)
    */

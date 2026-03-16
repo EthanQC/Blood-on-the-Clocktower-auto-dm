@@ -277,7 +277,6 @@ export default {
     },
     enterNight() {
       const myTeam = this.$store.state.players.myRole && this.$store.state.players.myRole.team;
-      console.log('[NightOverlay] enterNight called, myTeam:', myTeam, 'teamRecognition:', !!this.teamRecognition);
       // 邪恶阵营（team === 'evil'）先展示团队认知，再入睡
       // 用 myRole.team 判断，不依赖 team.recognition 事件是否到达
       if (myTeam === 'evil') {
@@ -308,11 +307,9 @@ export default {
     }
   },
   watch: {
-    step(newVal, oldVal) {
-      console.log('[NightOverlay] step changed:', oldVal, '->', newVal, 'pendingPrompt:', !!this.$store.state.night.pendingPrompt);
+    step(newVal) {
       if (newVal === 'sleeping' && this.$store.state.night.pendingPrompt) {
         setTimeout(() => {
-          console.log('[NightOverlay] consuming pendingPrompt after delay');
           this.$store.commit("night/consumePendingPrompt");
         }, 1500);
       }

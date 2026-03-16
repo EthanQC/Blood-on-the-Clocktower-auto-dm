@@ -72,3 +72,55 @@ Original prompt: 拉取远程最新更改到本地，读取近期更改，读取
 - 后续最值得继续做的项：
   - 再补一条“整局直到结算页”的浏览器回归，覆盖胜负判定与 recap 页面
   - 将夜晚阶段的角色结果也结构化写入可断言的 `report.json`，减少只靠截图排查
+
+2026-03-16 full repository review
+- 进入完整 review：覆盖仓库结构、代码、架构、功能与动态验证。
+- 已完成静态检查：
+  - `cd backend && go test ./...`
+  - `cd frontend && npm run lint-ci`
+  - `cd frontend && npm run e2e:room-flow`
+- 已开始补充“完整整局到 game.ended”的批量对局验证，不依赖 bot，而是用真实 HTTP/WS 多客户端驱动 7 名玩家自动完成夜晚、提名、辩护、顺序投票与胜负结算。
+- 临时审查脚本：
+  - `tmp/review_full_games.cjs`
+- 已完成 10 局完整自动对局，报告落盘：
+  - `tmp/full-game-review-report.json`
+- 10 局结果概览：
+  - 好人胜 6 局（原因均为“恶魔已死亡”）
+  - 坏人胜 4 局（原因均为“只剩2名玩家存活”）
+  - 对局长度范围：2~5 天 / 2~5 夜
+- 额外确认的问题：
+  - `GET /v1/rooms/{room_id}/events` 返回原始 `StoredEvent`，普通房间成员可直接看到 `role.assigned` 等敏感事件。
+  - 房主创建房间后在成员表中仍保留 `dm` 身份；`fetchState` / WS subscribe 依据成员角色投影，导致房主实际可拿到上帝视角状态与事件。
+  - 前端可选 `bmr` / `snv`，但后端实测仍只分配 Trouble Brewing 角色。
+  - `backend/loadtest` 多个场景与真实 API 不一致，存在“报错仍 PASS”与“测试本身未真正覆盖目标行为”的假阳性。
+
+2026-03-16 repository review fixes / final validation
+- 已完成针对 review 发现项的系统性修复，而非最小补丁：
+  - `backend/internal/api/api.go`、`backend/internal/projection/projection.go`、`backend/internal/realtime/ws.go`：统一按事件时点状态做投影；`events/state/replay/ws resync` 不再泄漏未投影原始事件；建房者成员身份改为 `player`，不再天然持有 DM 视角。
+  - `backend/internal/game/setup.go`、`backend/internal/engine/engine.go`、`frontend/src/store/index.js`：只允许并展示当前真实支持的 `tb` 剧本，阻断 `bmr/snv` 假功能入口。
+  - `backend/internal/bot/bot.go`、`backend/internal/bot/manager.go`：bot 现在会跟踪现有玩家并实际发起提名，不再停留在“想提名”的日志分支。
+  - `frontend/src/store/modules/chat.js`、`frontend/src/components/ChatView.vue`、`frontend/src/services/ApiService.js`：修复 evil chat 可见性；assistant 改为基于 `/v1/llm/health` 的能力开关，不再暴露必然 404 的 UI。
+  - `frontend/src/components/VoteOverlay.vue`、`frontend/src/components/NightOverlay.vue`、`frontend/src/store/modules/night.js`、`frontend/src/store/plugins/websocket.js`、`frontend/src/store/plugins/ws_game_events.js`：移除面向用户的调试残留与无效控制台输出。
+  - `backend/loadtest/internal/loadgen/*`：修正与真实 API 脱节的 client / scenario / validator，消除 S5 / S10 / S11 的假阳性与假阴性。
+  - `backend/internal/agent/autodm.go`：抑制游戏结束后迟到 agent 任务触发的 benign `game already ended` 噪音。
+- 已补充回归测试：
+  - `backend/internal/projection/projection_test.go`：覆盖角色分配和私聊投影边界。
+  - `backend/internal/game/setup_test.go`：覆盖不支持剧本的拒绝分支。
+  - `backend/internal/bot/bot_test.go`：覆盖 bot 自动提名。
+- 最终验收已通过：
+  - `cd backend && go test ./...`
+  - `cd backend/loadtest && go test ./...`
+  - `cd frontend && npm run lint-ci`
+  - `cd frontend && npm run build`
+  - `cd frontend && BOTC_E2E_BACKEND_URL=http://127.0.0.1:18080 VUE_APP_API_URL=http://127.0.0.1:18080 VUE_APP_WS_URL=ws://127.0.0.1:18080/ws npm run e2e:room-flow`
+  - `BOTC_REVIEW_BACKEND_URL=http://127.0.0.1:18080 BOTC_REVIEW_WS_URL=ws://127.0.0.1:18080/ws node tmp/review_full_games.cjs`
+- 动态结果：
+  - 浏览器真实流程通过，房主入夜、重连恢复、提名辩护顺序、bot 被提名后自动结束辩护、投票与再次入夜均正常。
+  - 修复后整局自动回归再次完成 10/10 全通过，报告更新到 `tmp/full-game-review-report-rerun.json`。
+  - 普通玩家再取不到他人 `role.assigned`、`true_role`、`night_actions` 等敏感数据；房主也不再拥有隐式上帝视角。
+- 已补做 LLM / AutoDM / RabbitMQ / RAG 真实链路验证：
+  - 使用本地 mock OpenAI 兼容服务 `tmp/mock_llm_server.cjs` 配合 RabbitMQ 与 Qdrant 启动 `AUTODM_ENABLED=true` 后端。
+  - `/v1/llm/health` 返回 `enabled=true`；Qdrant `botc_rules_mock` collection 计数为 27；RabbitMQ `agentdm_tasks` 队列有活跃 consumer。
+  - 通过 1 局真实 WS 驱动对局确认 agent 会实际发起 embeddings / chat completions 请求，`tmp/mock-llm-requests.jsonl` 中可见 `Relevant rule context` 注入，说明 RAG 检索与提示拼装链路已被打通。
+- 当前状态：
+  - 已无已知阻塞，可提交并推送本轮修复。

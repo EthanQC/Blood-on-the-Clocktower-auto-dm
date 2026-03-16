@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -47,15 +48,18 @@ type CreateRoomResponse struct {
 	RoomID string `json:"room_id"`
 }
 
-// RoomResponse is the response from getting room info.
-type RoomResponse struct {
-	RoomID  string `json:"room_id"`
-	OwnerID string `json:"owner_id"`
-	Phase   string `json:"phase"`
-	Players []struct {
-		UserID string `json:"user_id"`
-		Seat   int    `json:"seat"`
-	} `json:"players"`
+// RoomStateResponse is the projected room state returned by GET /state.
+type RoomStateResponse struct {
+	RoomID  string                         `json:"room_id"`
+	OwnerID string                         `json:"owner_id"`
+	Phase   string                         `json:"phase"`
+	Players map[string]RoomStatePlayerInfo `json:"players"`
+}
+
+// RoomStatePlayerInfo holds the public player fields needed by load tests.
+type RoomStatePlayerInfo struct {
+	UserID     string `json:"user_id"`
+	SeatNumber int    `json:"seat_number"`
 }
 
 // EventResponse is a single event from the event stream.
@@ -179,13 +183,13 @@ func (c *HTTPClient) JoinRoom(ctx context.Context, token, roomID string) error {
 	return nil
 }
 
-// GetRoom gets room information.
-func (c *HTTPClient) GetRoom(ctx context.Context, token, roomID string) (*RoomResponse, error) {
+// GetState gets projected room state.
+func (c *HTTPClient) GetState(ctx context.Context, token, roomID string) (*RoomStateResponse, error) {
 	headers := map[string]string{
 		"Authorization": "Bearer " + token,
 	}
 
-	resp, err := c.doJSON(ctx, "GET", fmt.Sprintf("/v1/rooms/%s", roomID), headers, nil)
+	resp, err := c.doJSON(ctx, "GET", fmt.Sprintf("/v1/rooms/%s/state", roomID), headers, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -193,10 +197,10 @@ func (c *HTTPClient) GetRoom(ctx context.Context, token, roomID string) (*RoomRe
 
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("get room failed: %d - %s", resp.StatusCode, string(bodyBytes))
+		return nil, fmt.Errorf("get state failed: %d - %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	var result RoomResponse
+	var result RoomStateResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
@@ -222,12 +226,22 @@ func (c *HTTPClient) GetEvents(ctx context.Context, token, roomID string, afterS
 		return nil, fmt.Errorf("get events failed: %d - %s", resp.StatusCode, string(bodyBytes))
 	}
 
-	var result EventsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
-	return &result, nil
+	var events []EventResponse
+	if err := json.Unmarshal(bodyBytes, &events); err == nil {
+		return &EventsResponse{Events: events}, nil
+	}
+
+	var wrapped EventsResponse
+	if err := json.Unmarshal(bodyBytes, &wrapped); err == nil {
+		return &wrapped, nil
+	}
+
+	return nil, fmt.Errorf("failed to decode events response: %s", string(bodyBytes))
 }
 
 // GetReplay gets all events up to a sequence number.
@@ -272,12 +286,11 @@ func (c *HTTPClient) Health(ctx context.Context) (*HealthResponse, error) {
 		return nil, fmt.Errorf("health check failed: %d", resp.StatusCode)
 	}
 
-	var result HealthResponse
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read health response: %w", err)
 	}
-
-	return &result, nil
+	return &HealthResponse{Status: strings.TrimSpace(string(bodyBytes))}, nil
 }
 
 // Metrics gets Prometheus metrics.

@@ -106,7 +106,7 @@ const getters = {
   },
   hasEvilChannel: (state, getters, rootState) => {
     const myRole = rootState.players.myRole;
-    return myRole && (myRole.team === 'minion' || myRole.team === 'demon');
+    return myRole && myRole.team === 'evil';
   }
 };
 

@@ -158,7 +158,6 @@ class WebSocketManager {
     if (reqId) delete this._pendingRequests[reqId];
     if (result && result.status === 'rejected') {
       if (cmdType === 'vote') this._store.commit('vote/setVotePending', false);
-      console.warn(`Command [${cmdType}] rejected:`, result.reason);
     }
   }
 

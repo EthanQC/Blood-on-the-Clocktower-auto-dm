@@ -17,12 +17,12 @@ func (r *Runner) runS5VisibilityLeakDetection(ctx context.Context) (ScenarioResu
 	}
 
 	// Create 3 users: sender, recipient, and observer
-	_, tokenSender, err := r.createTestUser(ctx, "s5_sender")
+	senderUserID, tokenSender, err := r.createTestUser(ctx, "s5_sender")
 	if err != nil {
 		return result, fmt.Errorf("failed to create sender: %w", err)
 	}
 
-	_, tokenRecipient, err := r.createTestUser(ctx, "s5_recipient")
+	recipientUserID, tokenRecipient, err := r.createTestUser(ctx, "s5_recipient")
 	if err != nil {
 		return result, fmt.Errorf("failed to create recipient: %w", err)
 	}
@@ -71,13 +71,23 @@ func (r *Runner) runS5VisibilityLeakDetection(ctx context.Context) (ScenarioResu
 	wsRecipient.Subscribe(ctx, roomID, 0)
 	wsObserver.Subscribe(ctx, roomID, 0)
 
+	wsSender.SendCommand(ctx, roomID, "join", fmt.Sprintf("join_sender_%d", time.Now().UnixNano()), map[string]string{
+		"name": "s5_sender",
+	})
+	wsRecipient.SendCommand(ctx, roomID, "join", fmt.Sprintf("join_recipient_%d", time.Now().UnixNano()), map[string]string{
+		"name": "s5_recipient",
+	})
+	wsObserver.SendCommand(ctx, roomID, "join", fmt.Sprintf("join_observer_%d", time.Now().UnixNano()), map[string]string{
+		"name": "s5_observer",
+	})
+
 	time.Sleep(500 * time.Millisecond)
 
 	// Sender sends a whisper to recipient
 	idempotencyKey := fmt.Sprintf("whisper_%d", time.Now().UnixNano())
 	whisperData := map[string]interface{}{
-		"to":      "recipient_user_id", // In real test, use actual user ID
-		"message": "secret message",
+		"to_user_id": recipientUserID,
+		"message":    "secret message",
 	}
 	if err := wsSender.SendCommand(ctx, roomID, "whisper", idempotencyKey, whisperData); err != nil {
 		// May fail if game not in right phase, that's OK for this test
@@ -113,12 +123,17 @@ func (r *Runner) runS5VisibilityLeakDetection(ctx context.Context) (ScenarioResu
 	result.Metrics["recipient_whisper_events"] = recipientWhispers
 	result.Metrics["observer_whisper_events"] = observerWhispers
 	result.Metrics["leak_detected"] = observerWhispers > 0
+	result.Metrics["sender_user_id"] = senderUserID
+	result.Metrics["recipient_user_id"] = recipientUserID
 
 	// Observer should not see whisper events
-	result.Passed = observerWhispers == 0
+	result.Passed = observerWhispers == 0 && senderWhispers > 0 && recipientWhispers > 0
 
 	if observerWhispers > 0 {
 		result.Errors = append(result.Errors, fmt.Sprintf("visibility leak: observer saw %d whisper events", observerWhispers))
+	}
+	if senderWhispers == 0 || recipientWhispers == 0 {
+		result.Errors = append(result.Errors, "whisper event was not visible to both sender and recipient")
 	}
 
 	return result, nil

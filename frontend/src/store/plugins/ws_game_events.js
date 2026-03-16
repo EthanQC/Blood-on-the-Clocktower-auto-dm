@@ -198,7 +198,6 @@ function handleSeatClaimed(pe, d, store) {
 function handleRoleAssigned(d, store) {
   // 防御性校验：只接受属于自己的角色分配事件
   if (d.user_id && d.user_id !== apiService.userId) {
-    console.warn('[handleRoleAssigned] ignoring event for other user:', d.user_id);
     return;
   }
   const roleId = d.role || '';
