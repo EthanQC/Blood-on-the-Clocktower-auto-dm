@@ -8,6 +8,8 @@ const state = () => ({
   subPhase: 'none', // 'none' | 'defense' | 'voting' | 'resolved'
   nominator: null, // { seatIndex }
   nominee: null, // { seatIndex }
+  nominatorEnded: false,
+  nomineeEnded: false,
   votes: [], // [{ seatIndex, vote: true/false }]
   voteOrder: [], // Sequential voting order (seat numbers, clockwise from nominee+1)
   currentVoterSeatIndex: -1, // Seat number of who votes next
@@ -20,22 +22,50 @@ const state = () => ({
 });
 
 const mutations = {
-  startNomination(state, { nominatorSeat, nomineeSeat, requiredMajority, voteOrder }) {
+  startNomination(state, {
+    nominatorSeat,
+    nomineeSeat,
+    nominatorId = '',
+    nomineeId = '',
+    requiredMajority,
+    voteOrder,
+    subPhase = 'defense',
+    currentVoterSeatIndex = null,
+    votes = [],
+    myVote = null,
+    nominatorEnded = false,
+    nomineeEnded = false
+  }) {
     state.isActive = true;
-    state.subPhase = 'defense';
-    state.nominator = { seatIndex: nominatorSeat };
-    state.nominee = { seatIndex: nomineeSeat };
-    state.votes = [];
+    state.subPhase = subPhase;
+    state.nominator = { id: nominatorId, seatIndex: nominatorSeat };
+    state.nominee = { id: nomineeId, seatIndex: nomineeSeat };
+    state.nominatorEnded = nominatorEnded;
+    state.nomineeEnded = nomineeEnded;
+    state.votes = Array.isArray(votes) ? votes : [];
     state.voteOrder = voteOrder || [];
-    state.currentVoterSeatIndex = voteOrder && voteOrder.length > 0 ? voteOrder[0] : -1;
+    if (typeof currentVoterSeatIndex === 'number') {
+      state.currentVoterSeatIndex = currentVoterSeatIndex;
+    } else {
+      state.currentVoterSeatIndex = voteOrder && voteOrder.length > 0 ? voteOrder[0] : -1;
+    }
     state.requiredMajority = requiredMajority || 0;
-    state.currentYesCount = 0;
-    state.myVote = null;
+    state.currentYesCount = state.votes.filter(v => v.vote).length;
+    state.myVote = myVote;
     state.isVotePending = false;
     state.result = null;
   },
   setSubPhase(state, subPhase) {
     state.subPhase = subPhase;
+  },
+  markDefenseProgress(state, userId) {
+    if (!userId) return;
+    if (state.nominator && state.nominator.id === userId) {
+      state.nominatorEnded = true;
+    }
+    if (state.nominee && state.nominee.id === userId) {
+      state.nomineeEnded = true;
+    }
   },
   castVote(state, { seatIndex, vote }) {
     const existing = state.votes.findIndex(v => v.seatIndex === seatIndex);
@@ -80,6 +110,8 @@ const mutations = {
     state.subPhase = 'none';
     state.nominator = null;
     state.nominee = null;
+    state.nominatorEnded = false;
+    state.nomineeEnded = false;
     state.votes = [];
     state.voteOrder = [];
     state.currentVoterSeatIndex = -1;
@@ -93,6 +125,8 @@ const mutations = {
     state.subPhase = 'none';
     state.nominator = null;
     state.nominee = null;
+    state.nominatorEnded = false;
+    state.nomineeEnded = false;
     state.votes = [];
     state.voteOrder = [];
     state.currentVoterSeatIndex = -1;
@@ -109,6 +143,12 @@ const getters = {
   voteProgress: state => {
     if (!state.requiredMajority) return 0;
     return Math.min(1, state.currentYesCount / state.requiredMajority);
+  },
+  currentDefenderSeat: state => {
+    if (state.subPhase !== 'defense') return -1;
+    if (!state.nominatorEnded && state.nominator) return state.nominator.seatIndex;
+    if (!state.nomineeEnded && state.nominee) return state.nominee.seatIndex;
+    return -1;
   },
   isNominated: state => seatIndex => {
     return state.nominee && state.nominee.seatIndex === seatIndex;

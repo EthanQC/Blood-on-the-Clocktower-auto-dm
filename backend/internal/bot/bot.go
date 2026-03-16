@@ -29,6 +29,11 @@ const (
 	PersonalitySmart      Personality = "smart"      // Uses role info to make better decisions
 )
 
+var (
+	botDefenseDelayMinMs = 1000
+	botDefenseDelayMaxMs = 3000
+)
+
 // BotConfig configures a bot player.
 type BotConfig struct {
 	UserID      string
@@ -60,6 +65,7 @@ type Bot struct {
 	hasVoted  bool
 
 	// Current nomination context (stored on nomination.created, used on defense.ended)
+	lastNominator string
 	lastNominee   string
 	lastVoteOrder []string // sequential user_id order from vote_order seats
 }
@@ -131,6 +137,8 @@ func (b *Bot) OnEvent(ctx context.Context, ev types.Event) {
 		b.phase = "day"
 		b.dayCount++
 		b.hasVoted = false
+		b.lastNominator = ""
+		b.lastNominee = ""
 		// Maybe chat after a delay
 		go b.maybeChatAfterDelay(ctx)
 
@@ -140,13 +148,28 @@ func (b *Bot) OnEvent(ctx context.Context, ev types.Event) {
 		go b.maybeNominateAfterDelay(ctx)
 
 	case "nomination.created":
-		// Store nominee for later voting (defense phase must end first)
+		// Store nomination context for defense + later voting.
+		b.lastNominator = payload["nominator_user_id"]
 		b.lastNominee = payload["nominee"]
+		if b.userID == b.lastNominator {
+			go b.maybeEndDefenseAfterDelay(ctx)
+		}
+
+	case "defense.progress":
+		// After the nominator ends, the nominee should end next.
+		if b.lastNominee != "" && b.lastNominee != b.lastNominator &&
+			payload["user_id"] == b.lastNominator && b.userID == b.lastNominee {
+			go b.maybeEndDefenseAfterDelay(ctx)
+		}
 
 	case "defense.ended":
 		// Now voting phase starts — try to vote after delay
 		nominee := b.lastNominee
 		go b.maybeVoteAfterDelay(ctx, nominee)
+
+	case "nomination.resolved":
+		b.lastNominator = ""
+		b.lastNominee = ""
 
 	case "vote.cast":
 		// Track our own vote result from server confirmation
@@ -247,6 +270,37 @@ func (b *Bot) maybeChatAfterDelay(ctx context.Context) {
 		ActorUserID: b.userID,
 		Payload:     payload,
 	})
+}
+
+func (b *Bot) maybeEndDefenseAfterDelay(ctx context.Context) {
+	delay := randomDuration(botDefenseDelayMinMs, botDefenseDelayMaxMs)
+	select {
+	case <-time.After(delay):
+	case <-ctx.Done():
+		return
+	}
+
+	b.mu.RLock()
+	dispatcher := b.dispatcher
+	roomID := b.roomID
+	userID := b.userID
+	b.mu.RUnlock()
+
+	if dispatcher == nil {
+		return
+	}
+
+	cmdPayload, _ := json.Marshal(map[string]string{})
+	err := dispatcher.DispatchAsync(types.CommandEnvelope{
+		CommandID:   fmt.Sprintf("bot-%s-end-defense-%d", userID, time.Now().UnixMilli()),
+		RoomID:      roomID,
+		Type:        "end_defense",
+		ActorUserID: userID,
+		Payload:     cmdPayload,
+	})
+	if err != nil {
+		b.logger.Warn("bot end defense failed", "bot", b.name, "error", err)
+	}
 }
 
 func (b *Bot) maybeNominateAfterDelay(ctx context.Context) {

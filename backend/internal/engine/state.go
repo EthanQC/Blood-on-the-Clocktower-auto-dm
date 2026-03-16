@@ -256,6 +256,8 @@ func (s State) Copy() State {
 			StartedAt:       s.Nomination.StartedAt,
 			DefenseEndsAt:   s.Nomination.DefenseEndsAt,
 			VotingEndsAt:    s.Nomination.VotingEndsAt,
+			NominatorEnded:  s.Nomination.NominatorEnded,
+			NomineeEnded:    s.Nomination.NomineeEnded,
 		}
 	}
 	return cp

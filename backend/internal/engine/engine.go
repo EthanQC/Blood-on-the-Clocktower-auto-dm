@@ -527,6 +527,15 @@ func handleEndDefense(state State, cmd types.CommandEnvelope) ([]types.Event, *t
 		return events, acceptedResult(cmd.CommandID), nil
 	}
 
+	if state.Nomination.Nominator != state.Nomination.Nominee {
+		if !state.Nomination.NominatorEnded && !isNominator {
+			return nil, nil, fmt.Errorf("nominator must end defense first")
+		}
+		if state.Nomination.NominatorEnded && !state.Nomination.NomineeEnded && !isNominee {
+			return nil, nil, fmt.Errorf("nominee must end defense next")
+		}
+	}
+
 	progressUserID := state.Nomination.Nominator
 	if isNominee {
 		progressUserID = state.Nomination.Nominee

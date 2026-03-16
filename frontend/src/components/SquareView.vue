@@ -42,20 +42,9 @@
       </div>
     </div>
 
-    <!-- Phase action: extend discussion / advance to night -->
-    <div class="square-view__phase-action" v-if="canExtendTime || canAdvanceToNight">
+    <!-- Phase action: advance to night -->
+    <div class="square-view__phase-action" v-if="canAdvanceToNight">
       <button
-        v-if="canExtendTime"
-        class="square-view__extend-btn"
-        @click="extendTime"
-      >
-        {{ $t('game.extendTime') }}
-        <span class="square-view__extend-count">
-          {{ $t('game.extensionsRemaining', { count: extensionsRemaining }) }}
-        </span>
-      </button>
-      <button
-        v-if="canAdvanceToNight"
         class="square-view__advance-btn"
         @click="advanceToNight"
       >
@@ -78,13 +67,10 @@ export default {
   name: "SquareView",
   components: { PlayerCircle, AliveCounter, PlayerActionSheet },
   computed: {
-    ...mapState("game", ["phase", "extensionsUsed", "maxExtensions"]),
+    ...mapState("game", ["phase"]),
     ...mapState("vote", { voteSubPhase: "subPhase" }),
     ...mapState("players", ["myRole"]),
     ...mapState("night", ["step", "targets", "selectedTargets", "roleId", "actionType"]),
-    extensionsRemaining() {
-      return this.maxExtensions - this.extensionsUsed;
-    },
     isNightSelecting() {
       return this.step === 'selecting';
     },
@@ -117,9 +103,6 @@ export default {
       };
       const mapped = roleVerbMap[this.roleId] || (this.actionType === 'select_two' ? '查验' : '选择');
       return mapped;
-    },
-    canExtendTime() {
-      return this.phase === 'day' && this.extensionsRemaining > 0;
     },
     canAdvanceToNight() {
       const isDay = this.phase === 'day' || this.phase === 'nomination';
@@ -169,9 +152,6 @@ export default {
         this.$store.commit("chat/setActiveWhisperTarget", player.seatIndex);
         this.$store.commit("ui/setActiveTab", "chat");
       }
-    },
-    extendTime() {
-      this.$store.commit("sendCommand", { type: "extend_time", data: {} });
     },
     advanceToNight() {
       this.$store.dispatch("advancePhase", "night");
@@ -248,29 +228,6 @@ export default {
   &__night-btn--skip {
     border-color: rgba(255, 255, 255, 0.25);
     background: rgba(255, 255, 255, 0.06);
-  }
-
-  &__extend-btn {
-    padding: 8px 20px;
-    border: 2px solid $townsfolk;
-    border-radius: 8px;
-    background: rgba($townsfolk, 0.1);
-    color: white;
-    font-size: 0.85rem;
-    cursor: pointer;
-    transition: all 200ms;
-    margin-right: 8px;
-
-    &:active {
-      background: rgba($townsfolk, 0.25);
-      transform: scale(0.95);
-    }
-  }
-
-  &__extend-count {
-    font-size: 0.75rem;
-    opacity: 0.7;
-    margin-left: 4px;
   }
 
   &__advance-btn {

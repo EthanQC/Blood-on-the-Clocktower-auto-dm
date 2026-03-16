@@ -1,0 +1,54 @@
+Original prompt: 拉取远程最新更改到本地，读取近期更改，读取plans目录，然后做进一步修改
+
+2026-03-16
+- 已执行 `git pull --ff-only`，本地从 `74f492b` fast-forward 到 `7593d49`。
+- 已阅读近期提交与 `.claude/plans`，确认 2026-03-13 与 2026-03-14 计划均已完成。
+- 当前继续处理用户截图中的 2026-03-15 三项问题：
+  - 取消“延长讨论”按钮。
+  - 修复房主“进入夜晚”按钮显示/判定问题。
+  - 修复提名后辩护顺序与按钮归属：提名者先辩护，再由被提名者辩护，最后进入投票。
+- 已定位相关文件：
+  - `frontend/src/components/SquareView.vue`
+  - `frontend/src/components/VoteOverlay.vue`
+  - `frontend/src/store/modules/vote.js`
+  - `frontend/src/store/plugins/ws_game_events.js`
+  - `frontend/src/store/plugins/ws_state_sync.js`
+  - `backend/internal/engine/engine.go`
+  - `backend/internal/engine/engine_defense_test.go`
+- 已完成改动：
+  - 移除 `SquareView` 中的“延长讨论”按钮，只保留“进入夜晚”入口。
+  - 前端状态同步新增 `owner_id -> isRoomOwner` 映射，并同步当前提名态与 `phase_ends_at`。
+  - 投票 store 新增辩护进度状态，前端根据 `defense.progress` 只给当前辩护方展示“结束辩护”按钮。
+  - 后端 `handleEndDefense` 新增顺序校验，禁止被提名者先于提名者结束辩护。
+  - 新增 2026-03-15 计划文档：`.claude/plans/2026-03-15-001-discussion-night-defense-followups.md`。
+- 已验证：
+  - `cd backend && go test ./internal/engine`
+  - `cd frontend && npm run lint-ci`
+  - 启动 `frontend` dev server 后，用 Playwright client 对 `http://127.0.0.1:8081` 做 smoke check；首页正常渲染，临时产物已清理。
+- 当前阻塞：
+- 本机 Docker daemon 未启动，且 `localhost:3316/6389/5672` 无服务，无法完成依赖真实后端环境的整局联调。
+
+2026-03-16 overview / review / validation
+- 已启动 Docker Desktop，并拉起 `mysql` / `redis` / `rabbitmq` / `qdrant` 依赖，补跑真实房间流程联调。
+- 联调时发现 bot 作为被提名者时，提名者结束辩护后 bot 的 `end_defense` 被后端拒绝。根因不是 bot 调度本身，而是 `backend/internal/engine/state.go` 的 `State.Copy()` 漏拷 `Nomination.NominatorEnded` / `NomineeEnded`，导致工作态复制后丢失辩护进度。
+- 已修复：
+  - `backend/internal/engine/state.go`：补齐 `NominatorEnded` / `NomineeEnded` 深拷贝。
+  - `backend/internal/engine/state_copy_test.go`：新增回归测试，覆盖提名辩护进度复制。
+  - `backend/internal/bot/bot.go`：bot 在 `nomination.created` / `defense.progress` 后会按顺序自动发送 `end_defense`。
+  - `backend/internal/bot/bot_test.go`：新增 bot 提名者 / 被提名者自动结束辩护测试。
+  - `frontend/src/main.js`：补齐 `spinner` / `moon` 图标注册，消除实测期间的 Font Awesome 运行期错误。
+  - `frontend/src/components/VoteOverlay.vue`、`frontend/src/store/plugins/ws_game_events.js`：移除本轮调试日志。
+- 重新验证已通过：
+  - `cd backend && go test ./internal/bot ./internal/engine`
+  - `cd frontend && npm run lint-ci`
+  - Playwright 完整真实流程回归（截图产物已核对）：
+    - 创建房间
+    - 添加 6 个 bot
+    - 开始游戏并完成首夜
+    - 白天无“延长讨论”按钮，房主可见“Enter Night”
+    - 1 号提名 2 号后，先进入 1 号辩护，再切到 2 号 bot 辩护
+    - 顺序投票成功，轮到本人时可正常投票
+    - 投票结算后房主可再次进入夜晚
+    - 浏览器控制台无错误
+- 当前状态：
+  - 已无已知阻塞，可进入提交与推送阶段。

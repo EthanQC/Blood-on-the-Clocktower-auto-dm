@@ -18,7 +18,7 @@
 
       <!-- Defense phase -->
       <div class="vote-overlay__defense" v-if="subPhase === 'defense'">
-        <p class="vote-overlay__defense-text">{{ $t('vote.defensePhase') }}</p>
+        <p class="vote-overlay__defense-text">{{ defensePhaseLabel }}</p>
         <p class="vote-overlay__countdown" v-if="countdown > 0">{{ countdown }}s</p>
         <button
           v-if="canEndDefense"
@@ -27,7 +27,7 @@
         >
           {{ $t('vote.endDefense') }}
         </button>
-        <p v-else class="vote-overlay__defense-waiting">{{ $t('vote.defenseWaiting') }}</p>
+        <p v-else class="vote-overlay__defense-waiting">{{ defenseWaitingLabel }}</p>
       </div>
 
       <!-- Voting phase -->
@@ -130,7 +130,7 @@ export default {
       "myVote", "isVotePending", "result"
     ]),
     ...mapState("game", ["phaseDeadline"]),
-    ...mapGetters("vote", ["voteProgress"]),
+    ...mapGetters("vote", ["voteProgress", "currentDefenderSeat"]),
     nominatorSeat() {
       return this.nominator ? this.nominator.seatIndex : '?';
     },
@@ -152,16 +152,26 @@ export default {
     voteYesLabel() {
       return this.isDeadVoter ? this.$t('vote.voteGhost') : this.$t('vote.voteYes');
     },
+    defensePhaseLabel() {
+      if (this.currentDefenderSeat > 0) {
+        return this.$t('vote.defensePhaseFor', { n: this.currentDefenderSeat });
+      }
+      return this.$t('vote.defensePhase');
+    },
+    defenseWaitingLabel() {
+      if (this.currentDefenderSeat > 0) {
+        return this.$t('vote.defenseWaitingFor', { n: this.currentDefenderSeat });
+      }
+      return this.$t('vote.defenseWaiting');
+    },
     canVote() {
       const mySeat = Number(this.$store.state.seatIndex);
       const currentVoter = Number(this.currentVoterSeatIndex);
-      const result = this.subPhase === 'voting' && this.myVote === null && !this.isVotePending && mySeat === currentVoter;
-      console.log('[DBG] canVote:', result, '| subPhase:', this.subPhase, '| myVote:', this.myVote, '| isVotePending:', this.isVotePending, '| mySeat:', mySeat, '(type:', typeof mySeat, ') | currentVoter:', currentVoter, '(type:', typeof currentVoter, ')');
-      return result;
+      return this.subPhase === 'voting' && this.myVote === null && !this.isVotePending && mySeat === currentVoter;
     },
     canEndDefense() {
-      const mySeat = this.$store.state.seatIndex;
-      return mySeat === this.nominatorSeat || mySeat === this.nomineeSeat;
+      const mySeat = Number(this.$store.state.seatIndex);
+      return this.subPhase === 'defense' && mySeat > 0 && mySeat === this.currentDefenderSeat;
     },
     resultClass() {
       if (this.result === 'on_the_block' || this.result === 'executed') return 'executed';
