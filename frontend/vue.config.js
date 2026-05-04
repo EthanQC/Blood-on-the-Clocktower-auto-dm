@@ -3,8 +3,7 @@ module.exports = {
   // publicPath: process.env.NODE_ENV === "production" ? "/townsquare/" : "/"
   publicPath: process.env.NODE_ENV === "production" ? "/" : "/",
   devServer: {
-    port: 8092,
-    // 如果 8092 被占用则自动尝试下一个端口
-    // Windows Hyper-V 会排除 8080-8090 范围，故默认用 8092
+    port: 8081,
+    // 与 README、AGENTS 和稳定化手动 QA 计划保持一致。
   }
 };
