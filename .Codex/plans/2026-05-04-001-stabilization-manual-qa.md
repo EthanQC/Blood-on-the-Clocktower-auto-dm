@@ -814,7 +814,7 @@ For DeepSeek validation, set `backend/.env` values locally:
 ```env
 AUTODM_ENABLED=true
 AUTODM_LLM_PROVIDER=deepseek
-AUTODM_LLM_BASE_URL=https://api.deepseek.com
+AUTODM_LLM_BASE_URL=https://api.deepseek.com/v1
 AUTODM_LLM_MODEL=deepseek-v4-pro
 AUTODM_LLM_TIMEOUT_SEC=60
 ```
