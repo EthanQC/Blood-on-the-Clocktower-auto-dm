@@ -76,6 +76,22 @@ Copy this section for each new issue.
 - `go version` inside `botc_backend_eval`: unavailable, `go` not found.
 - Local `go version`: unavailable, `go` not found.
 
+## Layer 1 Result
+
+- Status: pass
+- Browser: Codex in-app browser using Browser Use `iab` backend; exact browser version not exposed by available browser API.
+- Frontend URL: `http://localhost:8081/`
+- Backend health: `ok` from `http://localhost:8080/health`
+- WebSocket: UI displayed `已连接` after room creation.
+- First interaction: clicked `创建房间`, created room `ec37209f`, and reached lobby where a room can be configured.
+- Console errors: none recorded through initial load and first interaction.
+- Console warnings: none recorded through initial load and first interaction.
+- Evidence paths:
+  - `/tmp/botc-stabilization-evidence/layer1-initial-load.png`
+  - `/tmp/botc-stabilization-evidence/layer1-after-create-click.png`
+  - `/tmp/botc-stabilization-evidence/layer1-after-create-settled.png`
+- Issues opened: none.
+
 ## Issues
 
 No issues recorded yet.

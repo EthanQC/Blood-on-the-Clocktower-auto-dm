@@ -237,7 +237,7 @@ Expected:
 - Modify: `docs/superpowers/specs/2026-05-04-stabilization-issue-ledger.md`
 - Modify: `.Codex/plans/2026-05-04-001-stabilization-manual-qa.md`
 
-- [ ] **Step 1: Open frontend in browser**
+- [x] **Step 1: Open frontend in browser**
 
 Use browser or computer control to open:
 
@@ -250,7 +250,7 @@ Expected:
 - App loads without an error-level browser console entry from initial load through first interaction.
 - Record browser name/version and screenshot path in `/tmp/botc-stabilization-evidence/`.
 
-- [ ] **Step 2: Complete first interaction**
+- [x] **Step 2: Complete first interaction**
 
 Interact with the first screen as a real user:
 
@@ -263,7 +263,7 @@ Expected:
 - WebSocket connection establishes.
 - No fatal UI overlay blocks the app.
 
-- [ ] **Step 3: Record Layer 1 result**
+- [x] **Step 3: Record Layer 1 result**
 
 Append to the ledger:
 
@@ -280,7 +280,7 @@ Append to the ledger:
 - Issues opened:
 ```
 
-- [ ] **Step 4: Gate on Layer 1**
+- [x] **Step 4: Gate on Layer 1**
 
 If Layer 1 fails with P0:
 
@@ -294,7 +294,7 @@ If Layer 1 passes:
 Proceed to Layer 2.
 ```
 
-- [ ] **Step 5: Commit Layer 1 evidence summary**
+- [x] **Step 5: Commit Layer 1 evidence summary**
 
 Run:
 
@@ -1034,4 +1034,4 @@ Expected:
 
 - Final plan status is committed.
 
-## 状态：🔄 进行中 - 当前在第 3 步（Task 3 Step 1）
+## 状态：🔄 进行中 - 当前在第 4 步（Task 4 Step 1）
