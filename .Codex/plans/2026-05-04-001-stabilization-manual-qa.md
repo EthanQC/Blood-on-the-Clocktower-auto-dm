@@ -14,8 +14,21 @@
 
 - Design spec: `docs/superpowers/specs/2026-05-04-stabilization-manual-qa-design.md`
 - Issue ledger to create: `docs/superpowers/specs/2026-05-04-stabilization-issue-ledger.md`
+- Task register to create: `docs/superpowers/specs/2026-05-04-stabilization-task-register.md`
 - Go/No-Go report to create: `docs/superpowers/specs/2026-05-04-stabilization-go-no-go.md`
 - Local raw evidence directory: `/tmp/botc-stabilization-evidence/`
+
+## Validity Reset And Execution Gate
+
+User decision on 2026-05-04: browser/manual functional observations made before real API key/provider configuration are not accepted as valid stabilization tests. They may remain as preliminary notes, but all Layer 1/2/3/4 manual QA gates are treated as unprocessed until the provider gate is completed.
+
+Execution ordering override:
+
+1. Keep Task 1 and Task 2 as setup/preflight work.
+2. Before counting any Task 3, Task 4, or Task 5 manual browser result as valid, complete Task 6 Step 1 through Step 6 for at least one real provider without leaking secrets.
+3. Task 6 Step 7, the in-game AutoDM trigger, can run later as part of Layer 4, but provider availability must be established before the next accepted manual game-flow test.
+4. Any issue discovered only during pre-key manual browser work is a candidate issue, not an accepted P0/P1/P2, until reproduced after the provider gate.
+5. Current provider gate status after non-game checking: blocked-missing-key because `backend/.env` is missing.
 
 ## File Structure
 
@@ -24,6 +37,8 @@ Planned documentation artifacts:
 - Create `docs/superpowers/specs/2026-05-04-stabilization-issue-ledger.md`
   - One record per P0/P1/P2 item.
   - Redacted summary only; raw screenshots/logs stay in `/tmp/botc-stabilization-evidence/`.
+- Create `docs/superpowers/specs/2026-05-04-stabilization-task-register.md`
+  - One total register for allowed tasks, forbidden tasks, provider-gated tasks, and backlog/future features.
 - Create `docs/superpowers/specs/2026-05-04-stabilization-go-no-go.md`
   - Final pass summary, unresolved issues, workarounds, and Go/No-Go decision.
 - Modify `.Codex/plans/2026-05-04-001-stabilization-manual-qa.md`
@@ -40,6 +55,8 @@ Possible code files, only if evidence proves a defect:
 - AutoDM/provider defects may touch `backend/internal/config/config.go`, `backend/internal/agent/`, or `backend/internal/agent/llm/`.
 
 No code file should be changed before there is an issue-ledger record with reproduction evidence.
+
+Static/preflight documentation and low-risk fixes are allowed before browser gameplay. Gameplay-flow fixes remain gated by accepted reproduction evidence after provider availability.
 
 ## Task 1: Create Stabilization Branch And Evidence Ledger
 
@@ -231,13 +248,152 @@ Expected:
 
 - Commit contains only documentation and plan status updates.
 
+## Task 2A: Brainstorm Coverage Review And Static Preflight
+
+**Files:**
+- Modify: `docs/superpowers/specs/2026-05-04-stabilization-manual-qa-design.md`
+- Modify: `docs/superpowers/specs/2026-05-04-stabilization-issue-ledger.md`
+- Create/modify: `docs/superpowers/specs/2026-05-04-stabilization-task-register.md`
+- Modify: `.Codex/plans/2026-05-04-001-stabilization-manual-qa.md`
+- Optional low-risk static fixes only after ledger entry exists.
+
+- [x] **Step 1: Record user validity correction**
+
+Record that pre-key browser/manual observations are not accepted as stabilization evidence.
+
+Expected:
+
+- Design, plan, and ledger all state that provider availability must be established before accepted manual gameplay QA.
+- Any previous pre-key observations are candidate notes only.
+
+- [x] **Step 2: Record brainstorm decisions and static work register**
+
+Record in the design and ledger:
+
+```text
+scope choice, release target, device coverage, AutoDM inclusion, real API policy, model/provider choices, key handling, known static risks, and future-feature boundary.
+```
+
+Expected:
+
+- A new session can recover the full brainstorm outcome without relying on screenshots or prior chat context.
+
+- [x] **Step 3: Static-check route and frontend API alignment**
+
+Inspect without browser gameplay:
+
+```bash
+rg -n "assistant|/v1/rooms|askAssistant|Route\\(" frontend/src backend/internal/api
+```
+
+Expected:
+
+- Confirm whether frontend calls `/v1/rooms/{room_id}/assistant` and whether backend registers it.
+- Open or update a Candidate/P1 ledger item. Do not implement a backend feature unless the user approves that behavior as needed.
+
+- [x] **Step 4: Static-check FontAwesome registrations**
+
+Inspect without browser gameplay:
+
+```bash
+rg -n "fa-|icon=|spinner|moon|library.add|faSpinner|faMoon" frontend/src
+```
+
+Expected:
+
+- Confirm whether `spinner` and `moon` are used but not registered.
+- If confirmed, this is a low-risk static P2 candidate and may be fixed with `frontend/src/main.js` plus frontend lint/build verification.
+
+- [x] **Step 5: Static-check port and API fallback consistency**
+
+Inspect:
+
+```bash
+rg -n "8081|8092|8888|8080|VUE_APP|API_BASE|devServer|localhost" README.md frontend/vue.config.js frontend/src/services frontend/.env* backend/.env.example
+```
+
+Expected:
+
+- Record whether README, Vue config, API fallback, and env files agree.
+- Decide whether this is a docs/config fix or deferred P2.
+
+- [x] **Step 6: Static-check night/defense/vote risk areas**
+
+Inspect:
+
+```bash
+rg -n "timeout|defense|nomination|vote|NominatorEnded|NomineeEnded|Copy\\(|night.action|phase.day" backend/internal/engine backend/internal/game backend/internal/room
+```
+
+Expected:
+
+- Record static risks and any candidate fixes.
+- Do not accept or commit gameplay-flow fixes until the issue is reproduced after the provider gate, unless the user explicitly approves a purely static bugfix.
+
+- [x] **Step 7: Static-check Codex plan hook alignment**
+
+Inspect:
+
+```bash
+rg -n "claude|Codex|\\.Codex|\\.codex|plans|sync-plan" AGENTS.md .Codex .codex 2>/dev/null || true
+```
+
+Expected:
+
+- Record whether plan hooks use paths inconsistent with AGENTS rules.
+- Fix only if it blocks plan execution or the user approves hook cleanup.
+
+- [x] **Step 8: Static-check provider config and model defaults**
+
+Inspect:
+
+```bash
+rg -n "GEMINI_API_KEY|AUTODM_LLM|DEEPSEEK|deepseek|gemini|BaseURL|Model" backend/.env.example backend/internal/config backend/internal/agent backend/cmd
+```
+
+Expected:
+
+- Record current variable names, base URLs, defaults, and any mismatch with chosen provider gate.
+- Do not search for or print real keys.
+
+- [x] **Step 9: Static-check redline files and verification constraints**
+
+Run:
+
+```bash
+wc -l backend/internal/engine/engine.go backend/internal/agent/autodm.go backend/internal/game/night.go frontend/src/store/plugins/ws_game_events.js frontend/src/components/VoteOverlay.vue 2>/dev/null || true
+which go || true
+node --version
+npm --version
+```
+
+Expected:
+
+- Record redline/hotspot boundaries and test runtime constraints.
+- Do not refactor large files as part of preflight.
+
+- [ ] **Step 10: Commit preflight documentation or low-risk static fixes**
+
+Run:
+
+```bash
+git status --short
+git add docs/superpowers/specs/2026-05-04-stabilization-manual-qa-design.md docs/superpowers/specs/2026-05-04-stabilization-issue-ledger.md .Codex/plans/2026-05-04-001-stabilization-manual-qa.md
+git commit -m "docs: record stabilization preflight coverage"
+```
+
+Expected:
+
+- Commit documentation first.
+- If low-risk static fixes are also made, use separate fix commits with exact file adds, never `git add .`.
+
 ## Task 3: Execute Layer 1 Environment Browser Smoke
 
 **Files:**
 - Modify: `docs/superpowers/specs/2026-05-04-stabilization-issue-ledger.md`
 - Modify: `.Codex/plans/2026-05-04-001-stabilization-manual-qa.md`
 
-- [x] **Step 1: Open frontend in browser**
+- [ ] **Step 1: Open frontend in browser**
 
 Use browser or computer control to open:
 
@@ -250,7 +406,7 @@ Expected:
 - App loads without an error-level browser console entry from initial load through first interaction.
 - Record browser name/version and screenshot path in `/tmp/botc-stabilization-evidence/`.
 
-- [x] **Step 2: Complete first interaction**
+- [ ] **Step 2: Complete first interaction**
 
 Interact with the first screen as a real user:
 
@@ -263,7 +419,7 @@ Expected:
 - WebSocket connection establishes.
 - No fatal UI overlay blocks the app.
 
-- [x] **Step 3: Record Layer 1 result**
+- [ ] **Step 3: Record Layer 1 result**
 
 Append to the ledger:
 
@@ -280,7 +436,7 @@ Append to the ledger:
 - Issues opened:
 ```
 
-- [x] **Step 4: Gate on Layer 1**
+- [ ] **Step 4: Gate on Layer 1**
 
 If Layer 1 fails with P0:
 
@@ -294,7 +450,7 @@ If Layer 1 passes:
 Proceed to Layer 2.
 ```
 
-- [x] **Step 5: Commit Layer 1 evidence summary**
+- [ ] **Step 5: Commit Layer 1 evidence summary**
 
 Run:
 
@@ -604,7 +760,7 @@ Expected:
 - Modify: `docs/superpowers/specs/2026-05-04-stabilization-issue-ledger.md`
 - Modify: `.Codex/plans/2026-05-04-001-stabilization-manual-qa.md`
 
-- [ ] **Step 1: Confirm key availability without printing secrets**
+- [x] **Step 1: Confirm key availability without printing secrets**
 
 Run:
 
@@ -618,8 +774,9 @@ Expected:
 
 - Output shows variable names only.
 - If no key is available, pause Layer 4 and ask the user to provide or place the key in `backend/.env`.
+- Current result: `backend/.env` is missing; provider gate is `blocked-missing-key`; no provider health or gameplay QA was run.
 
-- [ ] **Step 2: Choose primary models for this pass**
+- [x] **Step 2: Choose primary models for this pass**
 
 Record in the ledger:
 
@@ -632,6 +789,7 @@ Cost/latency candidates deferred: gemini-3.1-flash-lite-preview, deepseek-v4-fla
 Expected:
 
 - Detailed four-model quality ranking is deferred.
+- Current result: primary Gemini model and primary DeepSeek model are recorded in the design, ledger, and task register.
 
 - [ ] **Step 3: Configure Gemini path if key is available**
 
@@ -1034,4 +1192,4 @@ Expected:
 
 - Final plan status is committed.
 
-## 状态：🔄 进行中 - 当前在第 4 步（Task 4 Step 1）
+## 状态：🔄 进行中 - 当前在 Task 2A Step 10 / provider gate blocked-missing-key；Task 3/4/5/7 实测与实测驱动修复均未处理

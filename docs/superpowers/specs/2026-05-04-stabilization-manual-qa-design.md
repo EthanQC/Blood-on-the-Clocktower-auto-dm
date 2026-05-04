@@ -47,6 +47,12 @@ Manual browser testing:
 - The driver may be the user or an agent controlling the user's browser/computer.
 - Direct backend scripts may assist diagnostics, event inspection, or replay checks, but they must not replace UI-driven functional conclusions.
 
+Provider gate:
+
+- User decision on 2026-05-04: no browser/manual functional observation counts as accepted stabilization evidence until real API key/provider availability is configured and minimally verified.
+- Pre-key browser observations may be preserved as preliminary notes or candidate issues only. They must be rerun after the provider gate before they can classify a real P0/P1/P2 or validate a fix.
+- Static code review, configuration review, template creation, lint/build/unit verification, and low-risk non-gameplay fixes may proceed before the provider gate.
+
 ## Context From The Interrupted Session
 
 The previous Codex session stalled because remote context compaction failed, not because the project runtime crashed. The observed error was a remote compact request disconnecting before completion at `/codex/responses/compact`.
@@ -61,11 +67,42 @@ At the time of handoff, local checks indicated:
 
 This context is a recovery note only. The stabilization pass evaluates the repository and runtime behavior; Codex platform compaction failures are not project defects.
 
+## Brainstorm Decisions And Current Work Register
+
+Decisions made during brainstorming:
+
+- Scope choice: first stabilize existing behavior. Future features remain a candidate pool only.
+- Release bar: close-to-release-grade for a small external alpha, not public production launch.
+- Device/browser coverage: desktop multi-player browser control plus desktop mobile responsive viewport. Real phone testing is deferred.
+- AutoDM scope: included as a core chain, not a mock-only or downgrade-only path.
+- API policy: real model calls are allowed and required for accepted stabilization evidence, but secrets must not leak.
+- Game scale: validate both five-player quick closure and seven-player representative release-grade flow.
+- Provider focus: Gemini plus DeepSeek. OpenAI is not the primary path for this pass.
+- Key handling: write real credentials to `backend/.env` when provided; never commit or print them.
+- Model baselines: `gemini-3-flash-preview` and `deepseek-v4-pro` as quality baselines; `gemini-3.1-flash-lite-preview` and `deepseek-v4-flash` as cost/latency candidates for later A/B.
+- Model quality A/B: recorded for later and not a blocking deliverable for this pass.
+
+Static findings already identified before accepted manual QA:
+
+- Frontend may call `/v1/rooms/{room_id}/assistant` while backend routes may not register that endpoint.
+- FontAwesome `spinner` and `moon` may be used without registration.
+- Frontend port defaults and documentation may disagree across README, Vue config, API fallback, and `.env.local`.
+- Night timeout fallback appears disabled, increasing the risk of hard stalls.
+- A candidate `State.Copy()` defense-progress patch exists and is only a static candidate until provider-gated reproduction/manual regression is completed.
+- Several historical files exceed project redlines and should not receive unrelated new logic.
+- Codex plan hooks and AGENTS plan path rules may be inconsistent.
+- Dependency audit risk exists and may be partly inflated by build tooling in production dependencies.
+- Local Go may be unavailable; backend verification may need a containerized Go path.
+- API keys were not found in the prior local safe search. Provider validation is blocked until the user supplies or places keys.
+
+These findings must be reflected in the issue ledger as static risks or candidate work, even when they are not yet accepted runtime defects.
+
 ## Scope
 
 In scope:
 
 - Environment recovery for local manual testing.
+- Static preflight review of known risks, provider configuration, route/config mismatches, and documentation/tooling drift.
 - Desktop browser multi-player testing with multiple tabs or browser profiles.
 - Mobile responsive viewport testing through the desktop browser.
 - Five-player quick closure flow.
@@ -91,15 +128,33 @@ Out of scope for this pass:
 The pass is successful when all of the following are true:
 
 1. The local environment can be restored into a testable state with backend, dependencies, frontend, and browser access.
-2. A five-player game can proceed from room creation to win/loss resolution without backend restart, manual database repair, forced page refresh outside the tested refresh path, or a hard stall as defined above.
-3. A seven-player game can cover night, day, nomination, vote, execution, refresh/reconnect, and room isolation flows with no unresolved P0 and no P1 lacking a documented workaround.
-4. No observed player identity or private-information leak occurs across tabs, players, or rooms. Any observed private-information leak is a failure for this pass.
-5. AutoDM can be configured with real provider credentials without leaking secrets, and at least one real model path can participate in an observable in-game hosting flow.
-6. All discovered issues are classified as P0, P1, P2, or Backlog, with P0 and P1 either fixed or explicitly blocked with evidence.
+2. Real provider availability has been configured and minimally verified without leaking secrets.
+3. A five-player game can proceed from room creation to win/loss resolution without backend restart, manual database repair, forced page refresh outside the tested refresh path, or a hard stall as defined above.
+4. A seven-player game can cover night, day, nomination, vote, execution, refresh/reconnect, and room isolation flows with no unresolved P0 and no P1 lacking a documented workaround.
+5. No observed player identity or private-information leak occurs across tabs, players, or rooms. Any observed private-information leak is a failure for this pass.
+6. AutoDM can be configured with real provider credentials without leaking secrets, and at least one real model path can participate in an observable in-game hosting flow.
+7. All discovered issues are classified as P0, P1, P2, Candidate, or Backlog, with P0 and P1 either fixed or explicitly blocked with evidence.
 
 ## Manual Test Matrix
 
 Manual testing must be performed through real browser interaction by controlling the user's computer. Scripted tests may assist diagnostics, log inspection, or state inspection, but they must not replace manual functional conclusions.
+
+Manual testing layers below are accepted only after the provider gate has passed. Running them earlier produces preliminary observations, not stabilization evidence.
+
+### Layer 0: Static Preflight
+
+Verify without browser gameplay:
+
+- Route and frontend API alignment, especially AI assistant endpoints.
+- Icon registration consistency for used FontAwesome icons.
+- Frontend port and API fallback consistency.
+- Night timeout and defense/vote state-machine risk areas.
+- Plan hook path consistency with AGENTS rules.
+- Provider variable names, base URLs, model defaults, and `.env.example` guidance.
+- Existing redline files and boundaries for any later fixes.
+- Test command feasibility, including local Go absence and possible containerized Go verification.
+
+Layer 0 can open static-risk ledger items or low-risk fixes. It must not count as manual gameplay validation.
 
 ### Layer 1: Environment Recovery
 
@@ -207,6 +262,11 @@ P2:
 - Npm audit findings that do not block local testing.
 - Historical file-size redline violations.
 - Plan hook path drift between `.codex` and project instructions.
+
+Candidate:
+
+- Static finding, pre-key browser observation, or preliminary defect that has not been reproduced after the provider gate.
+- Candidate items can guide investigation and low-risk static fixes, but they do not count as accepted P0/P1/P2 stabilization evidence until validated under the current gate.
 
 Backlog:
 
@@ -316,6 +376,8 @@ Potential areas:
 - Replay and records: timeline replay, night action log, vote log, AI summary, deduction replay, and exportable reports.
 - Content expansion: more roles, script management, custom scripts, balance suggestions, role-pack import, and localization polish.
 - Room operations: host console, seat changes, substitute players, kick, disconnect takeover, share links, spectator mode, permissions, and identity management.
+- Model routing and quality evaluation: Gemini/DeepSeek A/B routing, latency/cost tracking, quality rubrics, and non-blocking model comparisons.
+- Deployment and operations: deploy runbooks, production observability, backups, incident response, and hosted operations readiness.
 
 Early candidate priorities after stabilization:
 
@@ -324,6 +386,7 @@ Early candidate priorities after stabilization:
 3. Replay timeline.
 4. Rules explanation.
 5. AI host personality and model routing.
+6. Deployment and operations capability.
 
 These candidates do not affect the first stabilization pass.
 
