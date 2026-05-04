@@ -147,7 +147,7 @@ The current design, plan, ledger, and task register cover the required brainstor
 
 - Scope: clarify Gemini baseline/cost-candidate comments and add commented DeepSeek provider-gate example variables to `backend/.env.example`.
 - Verification: static `rg` provider-config check reran after the edit; no real `.env` or key value was read or printed.
-- Fix commit: pending separate docs/config static-fix commit.
+- Fix commit: this commit (`docs: clarify provider env example`).
 - Accepted provider status: still blocked-missing-key because `backend/.env` is missing.
 
 ## Future Feature Candidate Pool
