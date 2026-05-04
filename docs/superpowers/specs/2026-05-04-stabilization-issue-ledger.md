@@ -124,7 +124,7 @@ The current design, plan, ledger, and task register cover the required brainstor
 - Verification:
   - `cd frontend && npm run lint-ci` exited 0 with no lint errors.
   - `cd frontend && npm run build` exited 0; build retained existing Browserslist, console-warning, and bundle-size warnings.
-- Fix commit: pending separate static-fix commit.
+- Fix commit: this commit (`fix(frontend): register stabilization icons`).
 - Accepted manual status: still unprocessed until provider-gated browser reproduction.
 
 ### STATIC-003 - Frontend port and API fallback alignment
@@ -254,7 +254,7 @@ Copy this section for each new issue.
 ### STAB-001 - Candidate FontAwesome spinner icon is not registered
 
 - Severity: candidate P2
-- Status: unprocessed; pending valid reproduction after real provider gate
+- Status: static icon-registration fix committed; accepted browser status still unprocessed pending valid reproduction after real provider gate
 - Current commit: `9b45292 docs: record layer 1 stabilization smoke`
 - Date/time and timezone: 2026-05-04 15:37:46 CST
 - Browser and version: Playwright Chromium, `Chrome/147.0.0.0`
@@ -271,9 +271,9 @@ Copy this section for each new issue.
 - Backend log time window: 2026-05-04 15:37 CST; backend composed roles and emitted first night events without crash.
 - Event evidence: latest event sequence was monotonic through seq 20; no event-store impact observed.
 - Initial suspected layer: frontend icon registration in FontAwesome setup.
-- Fix commit:
-- Regression evidence: not run; pre-key observation is not accepted as valid stabilization evidence.
-- Validity note: preserve as a static/preliminary candidate only. Reproduce after provider gate before treating as accepted P2 or fixing under this pass.
+- Fix commit: this commit (`fix(frontend): register stabilization icons`)
+- Regression evidence: `cd frontend && npm run lint-ci` exited 0; `cd frontend && npm run build` exited 0 with existing non-blocking warnings. Provider-gated browser reproduction/regression not run.
+- Validity note: preserve as a static/preliminary candidate only. Reproduce after provider gate before treating as accepted P2 closure.
 
 ### STAB-002 - Candidate defense phase hard-stall after both sides end defense
 
