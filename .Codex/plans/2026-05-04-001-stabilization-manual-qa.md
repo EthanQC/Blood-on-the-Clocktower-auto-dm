@@ -158,7 +158,7 @@ Expected:
 - Modify: `docs/superpowers/specs/2026-05-04-stabilization-issue-ledger.md`
 - Modify: `.Codex/plans/2026-05-04-001-stabilization-manual-qa.md`
 
-- [ ] **Step 1: Record service state**
+- [x] **Step 1: Record service state**
 
 Run:
 
@@ -175,7 +175,7 @@ Expected:
 - If backend is down, record the failure as STAB-001 and restart dependencies before continuing.
 - Frontend may be down at this point.
 
-- [ ] **Step 2: Start dependencies if needed**
+- [x] **Step 2: Start dependencies if needed**
 
 If required services are missing, run:
 
@@ -189,7 +189,7 @@ Expected:
 - MySQL, Redis, RabbitMQ, Qdrant, Prometheus, Grafana, and backend dependencies are available.
 - Do not destroy existing volumes unless the user explicitly approves a reset.
 
-- [ ] **Step 3: Start frontend on port 8081**
+- [x] **Step 3: Start frontend on port 8081**
 
 Run in a long-lived terminal:
 
@@ -203,7 +203,7 @@ Expected:
 - Frontend serves at `http://localhost:8081/`.
 - If 8081 is occupied, record the process using the port and decide whether to reuse it or switch ports before browser testing.
 
-- [ ] **Step 4: Record version facts**
+- [x] **Step 4: Record version facts**
 
 Run:
 
@@ -218,7 +218,7 @@ Expected:
 
 - Version output is copied into the ledger header or environment section.
 
-- [ ] **Step 5: Commit environment notes**
+- [x] **Step 5: Commit environment notes**
 
 Run:
 
@@ -1034,4 +1034,4 @@ Expected:
 
 - Final plan status is committed.
 
-## 状态：🔄 进行中 - 当前在第 2 步（Task 2 Step 1）
+## 状态：🔄 进行中 - 当前在第 3 步（Task 3 Step 1）
