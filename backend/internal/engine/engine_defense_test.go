@@ -41,3 +41,21 @@ func TestHandleEndDefenseRequiresBothSides(t *testing.T) {
 		t.Fatal("second end_defense should end defense after both sides confirmed")
 	}
 }
+
+func TestStateCopyPreservesDefenseProgress(t *testing.T) {
+	state := NewState("room")
+	state.Nomination = &Nomination{
+		Nominator:      "nominator",
+		Nominee:        "nominee",
+		NominatorEnded: true,
+		NomineeEnded:   true,
+	}
+
+	copied := state.Copy()
+	if !copied.Nomination.NominatorEnded {
+		t.Fatal("copy should preserve nominator defense progress")
+	}
+	if !copied.Nomination.NomineeEnded {
+		t.Fatal("copy should preserve nominee defense progress")
+	}
+}

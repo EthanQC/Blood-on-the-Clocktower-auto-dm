@@ -140,7 +140,7 @@ The current design, plan, ledger, and task register cover the required brainstor
 
 - Scope: preserve `NominatorEnded` and `NomineeEnded` in `State.Copy()` and cover the copy behavior with `TestStateCopyPreservesDefenseProgress`.
 - Verification: `docker run --rm -v "$PWD/backend":/app -w /app golang:1.25.5-alpine go test ./internal/engine` exited 0.
-- Fix commit: pending separate static-candidate-fix commit.
+- Fix commit: this commit (`fix(engine): preserve copied defense progress`).
 - Accepted manual status: STAB-002 remains candidate/unprocessed until provider-gated reproduction and required manual regression.
 
 ### STATIC-012 / Provider guidance - `.env.example`
@@ -278,7 +278,7 @@ Copy this section for each new issue.
 ### STAB-002 - Candidate defense phase hard-stall after both sides end defense
 
 - Severity: candidate P0
-- Status: unprocessed; pending valid reproduction after real provider gate
+- Status: static candidate fix committed; accepted gameplay status still unprocessed pending valid reproduction after real provider gate
 - Current commit: `9b45292 docs: record layer 1 stabilization smoke`
 - Date/time and timezone: 2026-05-04 15:45:08 CST
 - Browser and version: Playwright Chromium, `Chrome/147.0.0.0`
@@ -314,6 +314,6 @@ Copy this section for each new issue.
   - `backend/internal/engine/engine_defense_test.go`
 - Regression required: focused engine test for copied defense progress, then rerun failing manual defense path plus Layer 1 smoke; because engine code is touched, repeat full Layer 2 five-player closure.
 - Focused verification: `go test ./internal/engine`, using the local Docker Go image if host Go remains unavailable.
-- Fix commit:
-- Regression evidence: not run; pre-key observation is not accepted as valid stabilization evidence.
-- Validity note: root-cause evidence may guide later investigation, but the issue and any uncommitted fix attempt are not accepted until reproduced and regressed after provider availability is established.
+- Fix commit: this commit (`fix(engine): preserve copied defense progress`)
+- Regression evidence: Docker Go `go test ./internal/engine` exited 0. Provider-gated browser reproduction, failing manual defense path, Layer 1 smoke, and full Layer 2 five-player closure were not run.
+- Validity note: root-cause evidence and static unit coverage may guide later investigation, but the issue is not accepted as fixed until reproduced and manually regressed after provider availability is established.
