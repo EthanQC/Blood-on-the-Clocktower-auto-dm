@@ -133,7 +133,7 @@ The current design, plan, ledger, and task register cover the required brainstor
 - Verification:
   - `cd frontend && npm run lint-ci` exited 0 with no lint errors.
   - `cd frontend && npm run build` exited 0; build retained existing Browserslist, console-warning, and bundle-size warnings.
-- Fix commit: pending separate static-fix commit.
+- Fix commit: this commit (`fix(frontend): align local API defaults`).
 - Accepted manual status: static config fix only; no browser/manual evidence was collected.
 
 ### STATIC-014 / STAB-002 - Defense progress copy candidate
