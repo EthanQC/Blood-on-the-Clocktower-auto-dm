@@ -124,7 +124,7 @@ The current design, plan, ledger, and task register cover the required brainstor
 - Verification:
   - `cd frontend && npm run lint-ci` exited 0 with no lint errors.
   - `cd frontend && npm run build` exited 0; build retained existing Browserslist, console-warning, and bundle-size warnings.
-- Fix commit: this commit (`fix(frontend): register stabilization icons`).
+- Fix commit: `088c0f6 fix(frontend): register stabilization icons`.
 - Accepted manual status: still unprocessed until provider-gated browser reproduction.
 
 ### STATIC-003 - Frontend port and API fallback alignment
@@ -133,21 +133,21 @@ The current design, plan, ledger, and task register cover the required brainstor
 - Verification:
   - `cd frontend && npm run lint-ci` exited 0 with no lint errors.
   - `cd frontend && npm run build` exited 0; build retained existing Browserslist, console-warning, and bundle-size warnings.
-- Fix commit: this commit (`fix(frontend): align local API defaults`).
+- Fix commit: `4b3f4ba fix(frontend): align local API defaults`.
 - Accepted manual status: static config fix only; no browser/manual evidence was collected.
 
 ### STATIC-014 / STAB-002 - Defense progress copy candidate
 
 - Scope: preserve `NominatorEnded` and `NomineeEnded` in `State.Copy()` and cover the copy behavior with `TestStateCopyPreservesDefenseProgress`.
 - Verification: `docker run --rm -v "$PWD/backend":/app -w /app golang:1.25.5-alpine go test ./internal/engine` exited 0.
-- Fix commit: this commit (`fix(engine): preserve copied defense progress`).
+- Fix commit: `bb9091f fix(engine): preserve copied defense progress`.
 - Accepted manual status: STAB-002 remains candidate/unprocessed until provider-gated reproduction and required manual regression.
 
 ### STATIC-012 / Provider guidance - `.env.example`
 
 - Scope: clarify Gemini baseline/cost-candidate comments and add commented DeepSeek provider-gate example variables to `backend/.env.example`.
 - Verification: static `rg` provider-config check reran after the edit; no real `.env` or key value was read or printed.
-- Fix commit: this commit (`docs: clarify provider env example`).
+- Fix commit: `b258024 docs: clarify provider env example`.
 - Accepted provider status: still blocked-missing-key because `backend/.env` is missing.
 
 ## Future Feature Candidate Pool
@@ -271,7 +271,7 @@ Copy this section for each new issue.
 - Backend log time window: 2026-05-04 15:37 CST; backend composed roles and emitted first night events without crash.
 - Event evidence: latest event sequence was monotonic through seq 20; no event-store impact observed.
 - Initial suspected layer: frontend icon registration in FontAwesome setup.
-- Fix commit: this commit (`fix(frontend): register stabilization icons`)
+- Fix commit: `088c0f6 fix(frontend): register stabilization icons`
 - Regression evidence: `cd frontend && npm run lint-ci` exited 0; `cd frontend && npm run build` exited 0 with existing non-blocking warnings. Provider-gated browser reproduction/regression not run.
 - Validity note: preserve as a static/preliminary candidate only. Reproduce after provider gate before treating as accepted P2 closure.
 
@@ -314,6 +314,6 @@ Copy this section for each new issue.
   - `backend/internal/engine/engine_defense_test.go`
 - Regression required: focused engine test for copied defense progress, then rerun failing manual defense path plus Layer 1 smoke; because engine code is touched, repeat full Layer 2 five-player closure.
 - Focused verification: `go test ./internal/engine`, using the local Docker Go image if host Go remains unavailable.
-- Fix commit: this commit (`fix(engine): preserve copied defense progress`)
+- Fix commit: `bb9091f fix(engine): preserve copied defense progress`
 - Regression evidence: Docker Go `go test ./internal/engine` exited 0. Provider-gated browser reproduction, failing manual defense path, Layer 1 smoke, and full Layer 2 five-player closure were not run.
 - Validity note: root-cause evidence and static unit coverage may guide later investigation, but the issue is not accepted as fixed until reproduced and manually regressed after provider availability is established.

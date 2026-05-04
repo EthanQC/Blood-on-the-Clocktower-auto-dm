@@ -29,10 +29,10 @@ This register tracks every known task for the current stabilization flow, includ
 | A-016 | Redline/test runtime check | Allowed non-manual | completed | yes | host Go unavailable | Task 2A Step 9; STATIC-006; STATIC-010 | Use Docker Go when needed | Hotspot files exceed redlines; Node v25.8.1/npm 11.11.0 recorded. |
 | A-017 | `.env.example` provider guidance review | Allowed config/docs review | static docs/config fix committed | yes | provider health blocked | Task 2A Step 8; STATIC-012 | Wait for real credentials | Added commented DeepSeek provider-gate example and Gemini model candidate notes; no real `.env` or runtime default changed. |
 | A-018 | Static fix verification | Allowed non-manual | completed for current static fixes | yes | browser/manual verification blocked | User request | Preserve raw outputs in `/tmp` | Frontend lint/build and Docker Go unit test outputs saved under `/tmp/botc-stabilization-evidence/`. |
-| A-019 | Update ledger/design/plan state | Allowed documentation | in progress | yes | pending commits | User request; Plan execution rules | Commit docs first, then fix commits | Task 3/4/5/7 stay unchecked. |
-| A-020 | Self-check before final | Allowed non-manual | pending | yes | pending docs/fix commits | User request | Run required `rg`, secret scan, `git diff --check`, and status | Must show no accepted `Status: pass` or formal pre-key P0/P1/P2. |
-| A-021 | Necessary documentation commit | Allowed git action | pending | yes | pending staging review | User request | Stage exact doc files only | Do not use `git add .`. |
-| A-022 | Necessary static fix commits | Allowed git action | pending | yes | pending staging review | User request | Use one commit per low-risk static fix group | Do not stage `backend/.env`, raw evidence, `.playwright-cli/`, untracked `AGENTS.md`, or untracked `.codex/`. |
+| A-019 | Update ledger/design/plan state | Allowed documentation | completed | yes | none | User request; Plan execution rules | Keep paused at provider gate | Task 3/4/5/7 stay unchecked. |
+| A-020 | Self-check before final | Allowed non-manual | preliminary check clean; final rerun pending after status commit | yes | final status commit pending | User request | Rerun required checks after final status commit | Required `rg` checks and `git diff --check` produced no findings before this status update. |
+| A-021 | Necessary documentation commit | Allowed git action | completed | yes | none | User request | No further doc commit unless final status changes | Used exact path staging; no `git add .`. |
+| A-022 | Necessary static fix commits | Allowed git action | completed | yes | none | User request | Keep untracked files untouched | Static fixes were committed separately; `backend/.env`, raw evidence, `.playwright-cli/`, untracked `AGENTS.md`, and untracked `.codex/` were not staged. |
 
 ## B. Explicitly Not Allowed In This Round
 

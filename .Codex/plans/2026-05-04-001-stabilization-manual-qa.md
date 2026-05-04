@@ -372,7 +372,7 @@ Expected:
 - Record redline/hotspot boundaries and test runtime constraints.
 - Do not refactor large files as part of preflight.
 
-- [ ] **Step 10: Commit preflight documentation or low-risk static fixes**
+- [x] **Step 10: Commit preflight documentation or low-risk static fixes**
 
 Run:
 
@@ -1120,7 +1120,7 @@ Expected:
 Run:
 
 ```bash
-rg -n 'AIza|sk-[A-Za-z0-9_-]{12,}|Authorization: Bearer|GEMINI_API_KEY=.*[^<]|AUTODM_LLM_API_KEY=.*[^<]' \
+rg -n 'AI[z]a|s[k]-[A-Za-z0-9_-]{12,}|Authorization:[ ]Bearer|GEMINI_API_KEY[=].*[^<]|AUTODM_LLM_API_KEY[=].*[^<]' \
   docs/superpowers/specs/2026-05-04-stabilization-issue-ledger.md \
   docs/superpowers/specs/2026-05-04-stabilization-go-no-go.md \
   .Codex/plans/2026-05-04-001-stabilization-manual-qa.md || true
@@ -1192,4 +1192,4 @@ Expected:
 
 - Final plan status is committed.
 
-## 状态：🔄 进行中 - 当前在 Task 2A Step 10 / provider gate blocked-missing-key；Task 3/4/5/7 实测与实测驱动修复均未处理
+## 状态：⏸️ 暂停 - Task 2A 静态 preflight 已完成；provider gate blocked-missing-key；Task 3/4/5/7 实测与实测驱动修复均未处理
