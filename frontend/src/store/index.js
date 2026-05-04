@@ -38,6 +38,8 @@ Vue.use(Vuex);
 const editionsByKey = new Map(editionJSON.map(e => [e.id, e]));
 const rolesByKey = new Map(rolesJSON.map(r => [r.id, r]));
 const fabledByKey = new Map(fabledJSON.map(f => [f.id, f]));
+const SUPPORTED_EDITION_IDS = new Set(['tb']);
+const supportedEditions = editionJSON.filter(e => SUPPORTED_EDITION_IDS.has(e.id));
 
 const getRolesByEdition = (edition) => {
   if (!edition) return new Map();
@@ -73,7 +75,8 @@ export default new Vuex.Store({
     connected: false,
     reconnecting: false,
     latencyMs: 0,
-    seatCount: 7 // configurable seat count for lobby (backend default is also 7)
+    seatCount: 7, // configurable seat count for lobby (backend default is also 7)
+    assistantAvailable: false
   },
 
   getters: {
@@ -82,7 +85,7 @@ export default new Vuex.Store({
     isSpectator: state => state.role === 'spectator',
     rolesByKey: () => rolesByKey,
     editionsByKey: () => editionsByKey,
-    editionList: () => editionJSON,
+    editionList: () => supportedEditions,
     currentRoles: state => state.roles,
     seatLabel: () => (seatIndex) => `${seatIndex}号`
   },
@@ -105,10 +108,19 @@ export default new Vuex.Store({
       state.role = index >= 1 ? 'player' : 'spectator';
     },
     setEdition(state, edition) {
+      const resolveSupportedEdition = (value) => {
+        if (!value) return state.edition;
+        const id = typeof value === 'string' ? value : value.id;
+        if (!SUPPORTED_EDITION_IDS.has(id)) {
+          return state.edition;
+        }
+        return editionsByKey.get(id) || state.edition;
+      };
+
       if (typeof edition === 'string') {
-        state.edition = editionsByKey.get(edition) || state.edition;
+        state.edition = resolveSupportedEdition(edition);
       } else if (edition && edition.id) {
-        state.edition = editionsByKey.get(edition.id) || edition;
+        state.edition = resolveSupportedEdition(edition);
       }
       state.roles = getRolesByEdition(state.edition);
     },
@@ -123,6 +135,9 @@ export default new Vuex.Store({
     },
     setLatency(state, ms) {
       state.latencyMs = ms;
+    },
+    setAssistantAvailable(state, available) {
+      state.assistantAvailable = !!available;
     },
     resetRoom(state) {
       state.roomId = '';
@@ -161,6 +176,7 @@ export default new Vuex.Store({
       const data = await apiService.createRoom();
       commit('setRoomId', data.room_id);
       commit('setIsRoomOwner', true);
+      await dispatch('refreshAssistantAvailability');
       commit('ui/setScreen', 'lobby');
       return data;
     },
@@ -173,7 +189,17 @@ export default new Vuex.Store({
       await apiService.joinRoom(roomId);
       commit('setRoomId', roomId);
       commit('setIsRoomOwner', false);
+      await dispatch('refreshAssistantAvailability');
       commit('ui/setScreen', 'lobby');
+    },
+
+    async refreshAssistantAvailability({ commit }) {
+      try {
+        const health = await apiService.getLLMHealth();
+        commit('setAssistantAvailable', !!(health && health.enabled));
+      } catch (_err) {
+        commit('setAssistantAvailable', false);
+      }
     },
 
     /**
@@ -356,6 +382,9 @@ export default new Vuex.Store({
      * Calls backend askAssistant REST endpoint.
      */
     async askAssistant({ state }, { question, context }) {
+      if (!state.assistantAvailable) {
+        throw new Error('assistant unavailable');
+      }
       return apiService.askAssistant(state.roomId, question, context);
     },
 

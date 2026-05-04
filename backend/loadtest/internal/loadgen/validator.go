@@ -44,12 +44,10 @@ func (v *CorrectnessValidator) ValidateSeqMonotonicity(events []EventResponse) C
 		}
 		seenSeqs[ev.Seq] = true
 
-		// Check for gaps (only if we have a previous seq)
-		if lastSeq > 0 {
-			for missing := lastSeq + 1; missing < ev.Seq; missing++ {
-				metrics.MissingSeqs = append(metrics.MissingSeqs, missing)
-				metrics.SeqMonotonic = false
-			}
+		// Projected event streams may legitimately skip hidden sequences.
+		// Monotonicity only requires strictly increasing order with no duplicates.
+		if lastSeq > 0 && ev.Seq < lastSeq {
+			metrics.SeqMonotonic = false
 		}
 
 		lastSeq = ev.Seq
@@ -147,11 +145,13 @@ func (v *CorrectnessValidator) ValidateGamePhaseTransitions(phases []string) Gam
 
 	// Valid phase sequence: lobby -> night -> day -> (night -> day)* -> ended
 	validTransitions := map[string][]string{
-		"":      {"lobby"},
-		"lobby": {"night", "ended"},
-		"night": {"day", "ended"},
-		"day":   {"night", "ended"},
-		"ended": {},
+		"":            {"lobby"},
+		"lobby":       {"first_night", "night", "ended"},
+		"first_night": {"day", "night", "ended"},
+		"night":       {"day", "ended"},
+		"day":         {"nomination", "night", "ended"},
+		"nomination":  {"day", "night", "ended"},
+		"ended":       {},
 	}
 
 	prev := ""

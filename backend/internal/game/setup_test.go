@@ -66,3 +66,9 @@ func TestDrunkPerceivedRoleExcludesInPlayTownsfolk(t *testing.T) {
 		t.Fatalf("expected drunk role to exclude in-play townsfolk, got %q", result.DrunkRole)
 	}
 }
+
+func TestNormalizeEditionRejectsUnsupportedEdition(t *testing.T) {
+	if _, err := NormalizeEdition("bmr"); err == nil {
+		t.Fatal("expected unsupported edition to be rejected")
+	}
+}

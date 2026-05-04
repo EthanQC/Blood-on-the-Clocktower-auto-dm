@@ -191,8 +191,10 @@
     "close": "关闭",
     "history": "投票记录",
     "defensePhase": "辩护进行中...",
+    "defensePhaseFor": "{n}号玩家辩护中...",
     "endDefense": "结束辩护",
-    "defenseWaiting": "等待辩护结束..."
+    "defenseWaiting": "等待辩护结束...",
+    "defenseWaitingFor": "等待 {n} 号玩家结束辩护..."
   },
   "annotation": {
     "title": "标记角色",

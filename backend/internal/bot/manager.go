@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/qingchang/Blood-on-the-Clocktower-auto-dm/internal/engine"
 	"github.com/qingchang/Blood-on-the-Clocktower-auto-dm/internal/types"
 )
 
@@ -30,6 +31,10 @@ type Manager struct {
 	mu     sync.RWMutex
 	bots   map[string][]*Bot // roomID -> bots
 	logger *slog.Logger
+}
+
+type stateProvider interface {
+	GetState() engine.State
 }
 
 // NewManager creates a new bot manager.
@@ -75,6 +80,10 @@ func (m *Manager) AddBots(ctx context.Context, req AddBotsRequest, dispatcher Co
 
 	var botIDs []string
 	var newBots []*Bot
+	var existingPlayers map[string]engine.Player
+	if provider, ok := dispatcher.(stateProvider); ok {
+		existingPlayers = provider.GetState().Players
+	}
 
 	for i := 0; i < req.Count; i++ {
 		nameIdx := existing + i
@@ -91,30 +100,37 @@ func (m *Manager) AddBots(ctx context.Context, req AddBotsRequest, dispatcher Co
 			Logger:      m.logger,
 		})
 		b.SetDispatcher(dispatcher, req.RoomID)
+		for userID, player := range existingPlayers {
+			if player.IsDM {
+				continue
+			}
+			b.knownPlayers[userID] = knownPlayer{Alive: player.Alive}
+		}
 
 		newBots = append(newBots, b)
 		botIDs = append(botIDs, botID)
-
-		// Join the room as a player
-		joinPayload, _ := json.Marshal(map[string]string{
-			"name":        name,
-			"seat_number": fmt.Sprintf("%d", existing+i+1),
-			"role":        "player",
-		})
-		if err := dispatcher.DispatchAsync(types.CommandEnvelope{
-			CommandID:   fmt.Sprintf("bot-join-%s", botID),
-			RoomID:      req.RoomID,
-			Type:        "join",
-			ActorUserID: botID,
-			Payload:     joinPayload,
-		}); err != nil {
-			m.logger.Error("bot failed to join", "bot", name, "error", err)
-		}
 	}
 
 	m.mu.Lock()
 	m.bots[req.RoomID] = append(m.bots[req.RoomID], newBots...)
 	m.mu.Unlock()
+
+	for i, b := range newBots {
+		joinPayload, _ := json.Marshal(map[string]string{
+			"name":        b.Name(),
+			"seat_number": fmt.Sprintf("%d", existing+i+1),
+			"role":        "player",
+		})
+		if err := dispatcher.DispatchAsync(types.CommandEnvelope{
+			CommandID:   fmt.Sprintf("bot-join-%s", b.UserID()),
+			RoomID:      req.RoomID,
+			Type:        "join",
+			ActorUserID: b.UserID(),
+			Payload:     joinPayload,
+		}); err != nil {
+			m.logger.Error("bot failed to join", "bot", b.Name(), "error", err)
+		}
+	}
 
 	m.logger.Info("bots added", "room", req.RoomID, "count", req.Count, "total", existing+req.Count)
 	return botIDs, nil

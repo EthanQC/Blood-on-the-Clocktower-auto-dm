@@ -41,3 +41,22 @@ func TestHandleEndDefenseRequiresBothSides(t *testing.T) {
 		t.Fatal("second end_defense should end defense after both sides confirmed")
 	}
 }
+
+func TestHandleEndDefenseRejectsNomineeBeforeNominator(t *testing.T) {
+	state := NewState("room")
+	state.Phase = PhaseNomination
+	state.SubPhase = SubPhaseDefense
+	state.SeatOrder = []string{"nominator", "nominee"}
+	state.Players["nominator"] = Player{UserID: "nominator", SeatNumber: 1, Alive: true}
+	state.Players["nominee"] = Player{UserID: "nominee", SeatNumber: 2, Alive: true}
+	state.Nomination = &Nomination{
+		Nominator: "nominator",
+		Nominee:   "nominee",
+	}
+
+	cmd := types.CommandEnvelope{ActorUserID: "nominee", CommandID: "c1"}
+	_, _, err := handleEndDefense(state, cmd)
+	if err == nil {
+		t.Fatal("nominee should not be able to end defense before nominator")
+	}
+}

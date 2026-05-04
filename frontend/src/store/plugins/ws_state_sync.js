@@ -13,6 +13,10 @@ import apiService from "../../services/ApiService";
 export function syncRoomState(state, store) {
   if (!state) return;
 
+  if (typeof state.owner_id === 'string') {
+    store.commit('setIsRoomOwner', state.owner_id === apiService.userId);
+  }
+
   if (state.players) {
     syncPlayers(state.players, store);
   }
@@ -40,7 +44,11 @@ export function syncRoomState(state, store) {
   if (state.max_players) {
     store.commit('setSeatCount', state.max_players);
   }
+  if (state.phase_ends_at !== undefined) {
+    store.commit('game/setPhaseDeadline', state.phase_ends_at || 0);
+  }
 
+  syncVoteState(state, store);
   syncOwnRole(state.players, store);
 }
 
@@ -88,4 +96,55 @@ function syncOwnRole(playersMap, store) {
       reminders: Array.isArray(meData.reminders) ? meData.reminders : []
     });
   }
+}
+
+function syncVoteState(roomState, store) {
+  const nomination = roomState.nomination;
+  const playersMap = roomState.players || {};
+  if (!nomination || nomination.resolved || roomState.phase !== 'nomination') {
+    store.commit('vote/endVote');
+    return;
+  }
+
+  const alivePlayers = Object.values(playersMap).filter(player => player && player.alive).length;
+  const rawVoteOrder = Array.isArray(nomination.vote_order) ? nomination.vote_order : [];
+  const voteOrder = rawVoteOrder
+    .map(userId => playersMap[userId] && playersMap[userId].seat_number ? playersMap[userId].seat_number : 0)
+    .filter(seat => seat > 0);
+  const currentVoterIdx = Number.isInteger(nomination.current_voter_idx) ? nomination.current_voter_idx : -1;
+  const currentVoterUserId = currentVoterIdx >= 0 && currentVoterIdx < rawVoteOrder.length
+    ? rawVoteOrder[currentVoterIdx]
+    : '';
+  const currentVoterSeatIndex = currentVoterUserId && playersMap[currentVoterUserId]
+    ? playersMap[currentVoterUserId].seat_number
+    : -1;
+  const votes = Object.entries(nomination.votes || {})
+    .map(([userId, vote]) => {
+      const player = playersMap[userId];
+      if (!player || !player.seat_number) return null;
+      return { seatIndex: player.seat_number, vote: !!vote };
+    })
+    .filter(Boolean);
+
+  let myVote = null;
+  if (nomination.votes && Object.prototype.hasOwnProperty.call(nomination.votes, apiService.userId)) {
+    myVote = !!nomination.votes[apiService.userId];
+  }
+
+  const subPhase = roomState.sub_phase === 'voting' ? 'voting' : 'defense';
+
+  store.commit('vote/startNomination', {
+    nominatorSeat: nomination.nominator_seat || 0,
+    nomineeSeat: nomination.nominee_seat || 0,
+    nominatorId: nomination.nominator || '',
+    nomineeId: nomination.nominee || '',
+    requiredMajority: Math.ceil(alivePlayers / 2),
+    voteOrder,
+    subPhase,
+    currentVoterSeatIndex,
+    votes,
+    myVote,
+    nominatorEnded: !!nomination.nominator_ended,
+    nomineeEnded: !!nomination.nominee_ended
+  });
 }

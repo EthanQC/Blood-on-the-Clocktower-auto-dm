@@ -396,6 +396,31 @@ npm run dev
 
 前端服务启动在 `http://localhost:8081`
 
+### 5.1 运行真实房间流程回归
+
+安装前端依赖后，可直接运行一条完整的浏览器回归，自动覆盖：
+- 建房并入座
+- 添加 6 个 bot
+- 开局并完成首夜
+- 白天重连恢复房主状态
+- 提名、双阶段辩护、顺序投票
+- 房主再次进入夜晚
+
+```bash
+cd frontend
+npm run e2e:room-flow
+```
+
+默认行为：
+- 若 `http://127.0.0.1:8080` / `http://127.0.0.1:8081` 没有服务，脚本会自动启动后端和前端
+- 若 Docker 依赖未启动，脚本会自动执行 `docker compose up -d mysql redis rabbitmq qdrant`
+- 截图、日志与报告会输出到 `tmp/e2e-room-flow/`
+
+可选环境变量：
+- `BOTC_E2E_KEEP_SERVERS=1`：脚本结束后保留它启动的前后端进程
+- `BOTC_E2E_SKIP_DOCKER=1`：跳过 Docker 依赖拉起
+- `BOTC_E2E_FRONTEND_URL` / `BOTC_E2E_BACKEND_URL`：覆盖默认地址
+
 ### 6. 访问应用
 
 打开浏览器访问：

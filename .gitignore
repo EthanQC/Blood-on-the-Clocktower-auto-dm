@@ -49,3 +49,5 @@ backend/tools/
 backend/server
 townsquare/
 loadtest_*.json
+tmp/e2e-room-flow/
+tmp/e2e-room-flow-client/

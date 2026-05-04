@@ -33,8 +33,6 @@ export function processGameEvent(pe, store) {
   }
   if (!eventData) eventData = {};
 
-  console.log('[DBG] processGameEvent:', eventType);
-
   switch (eventType) {
     case 'player.joined':
       handlePlayerJoined(pe, eventData, store);
@@ -81,17 +79,15 @@ export function processGameEvent(pe, store) {
       addPhaseTimeline('nomination', store);
       break;
     case 'nomination.created':
-      console.log('[DBG] nomination.created raw data:', JSON.stringify(eventData));
       handleNominationCreated(eventData, store);
-      console.log('[DBG] after handleNominationCreated - voteOrder:', store.state.vote.voteOrder, 'currentVoter:', store.state.vote.currentVoterSeatIndex, 'subPhase:', store.state.vote.subPhase);
+      break;
+    case 'defense.progress':
+      handleDefenseProgress(eventData, store);
       break;
     case 'defense.ended':
-      console.log('[DBG] defense.ended received, setting subPhase to voting');
       store.commit('vote/setSubPhase', 'voting');
-      console.log('[DBG] after defense.ended - subPhase:', store.state.vote.subPhase, 'currentVoter:', store.state.vote.currentVoterSeatIndex, 'mySeat:', store.state.seatIndex);
       break;
     case 'vote.cast':
-      console.log('[DBG] vote.cast received:', JSON.stringify(eventData));
       handleVoteCast(pe, eventData, store);
       break;
     case 'nomination.resolved':
@@ -202,7 +198,6 @@ function handleSeatClaimed(pe, d, store) {
 function handleRoleAssigned(d, store) {
   // 防御性校验：只接受属于自己的角色分配事件
   if (d.user_id && d.user_id !== apiService.userId) {
-    console.warn('[handleRoleAssigned] ignoring event for other user:', d.user_id);
     return;
   }
   const roleId = d.role || '';
@@ -292,9 +287,21 @@ function handleNominationCreated(d, store) {
   if (d.vote_order) {
     try { voteOrder = JSON.parse(d.vote_order); } catch (_e) { voteOrder = []; }
   }
-  store.commit('vote/startNomination', { nominatorSeat, nomineeSeat, requiredMajority, voteOrder });
+  store.commit('vote/startNomination', {
+    nominatorSeat,
+    nomineeSeat,
+    nominatorId: d.nominator_user_id || '',
+    nomineeId: d.nominee || '',
+    requiredMajority,
+    voteOrder
+  });
   store.commit('players/updatePlayer', { seatIndex: nominatorSeat, property: 'hasNominatedToday', value: true });
   store.commit('players/updatePlayer', { seatIndex: nomineeSeat, property: 'isNominatedToday', value: true });
+}
+
+function handleDefenseProgress(d, store) {
+  if (!d || !d.user_id) return;
+  store.commit('vote/markDefenseProgress', d.user_id);
 }
 
 function handleVoteCast(pe, d, store) {
@@ -357,7 +364,6 @@ function handleTimeExtended(d, store) {
 }
 
 function handleNightActionPrompt(d, store) {
-  console.log('[DBG] handleNightActionPrompt:', d.user_id, 'my:', apiService.userId, 'role:', d.role_id, 'action_type:', d.action_type);
   if (d.user_id !== apiService.userId) return;
   const nightRoleId = d.role_id || '';
   const nightRoleData = store.getters.rolesByKey.get(nightRoleId);

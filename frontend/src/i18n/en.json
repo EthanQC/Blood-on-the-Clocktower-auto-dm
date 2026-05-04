@@ -191,8 +191,10 @@
     "close": "Close",
     "history": "Vote History",
     "defensePhase": "Defense in progress...",
+    "defensePhaseFor": "Seat {n} defending...",
     "endDefense": "End Defense",
-    "defenseWaiting": "Waiting for defense to end..."
+    "defenseWaiting": "Waiting for defense to end...",
+    "defenseWaitingFor": "Waiting for Seat {n} to end defense..."
   },
   "annotation": {
     "title": "Annotate Role",

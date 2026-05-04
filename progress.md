@@ -1,0 +1,126 @@
+Original prompt: 拉取远程最新更改到本地，读取近期更改，读取plans目录，然后做进一步修改
+
+2026-03-16
+- 已执行 `git pull --ff-only`，本地从 `74f492b` fast-forward 到 `7593d49`。
+- 已阅读近期提交与 `.claude/plans`，确认 2026-03-13 与 2026-03-14 计划均已完成。
+- 当前继续处理用户截图中的 2026-03-15 三项问题：
+  - 取消“延长讨论”按钮。
+  - 修复房主“进入夜晚”按钮显示/判定问题。
+  - 修复提名后辩护顺序与按钮归属：提名者先辩护，再由被提名者辩护，最后进入投票。
+- 已定位相关文件：
+  - `frontend/src/components/SquareView.vue`
+  - `frontend/src/components/VoteOverlay.vue`
+  - `frontend/src/store/modules/vote.js`
+  - `frontend/src/store/plugins/ws_game_events.js`
+  - `frontend/src/store/plugins/ws_state_sync.js`
+  - `backend/internal/engine/engine.go`
+  - `backend/internal/engine/engine_defense_test.go`
+- 已完成改动：
+  - 移除 `SquareView` 中的“延长讨论”按钮，只保留“进入夜晚”入口。
+  - 前端状态同步新增 `owner_id -> isRoomOwner` 映射，并同步当前提名态与 `phase_ends_at`。
+  - 投票 store 新增辩护进度状态，前端根据 `defense.progress` 只给当前辩护方展示“结束辩护”按钮。
+  - 后端 `handleEndDefense` 新增顺序校验，禁止被提名者先于提名者结束辩护。
+  - 新增 2026-03-15 计划文档：`.claude/plans/2026-03-15-001-discussion-night-defense-followups.md`。
+- 已验证：
+  - `cd backend && go test ./internal/engine`
+  - `cd frontend && npm run lint-ci`
+  - 启动 `frontend` dev server 后，用 Playwright client 对 `http://127.0.0.1:8081` 做 smoke check；首页正常渲染，临时产物已清理。
+- 当前阻塞：
+- 本机 Docker daemon 未启动，且 `localhost:3316/6389/5672` 无服务，无法完成依赖真实后端环境的整局联调。
+
+2026-03-16 overview / review / validation
+- 已启动 Docker Desktop，并拉起 `mysql` / `redis` / `rabbitmq` / `qdrant` 依赖，补跑真实房间流程联调。
+- 联调时发现 bot 作为被提名者时，提名者结束辩护后 bot 的 `end_defense` 被后端拒绝。根因不是 bot 调度本身，而是 `backend/internal/engine/state.go` 的 `State.Copy()` 漏拷 `Nomination.NominatorEnded` / `NomineeEnded`，导致工作态复制后丢失辩护进度。
+- 已修复：
+  - `backend/internal/engine/state.go`：补齐 `NominatorEnded` / `NomineeEnded` 深拷贝。
+  - `backend/internal/engine/state_copy_test.go`：新增回归测试，覆盖提名辩护进度复制。
+  - `backend/internal/bot/bot.go`：bot 在 `nomination.created` / `defense.progress` 后会按顺序自动发送 `end_defense`。
+  - `backend/internal/bot/bot_test.go`：新增 bot 提名者 / 被提名者自动结束辩护测试。
+  - `frontend/src/main.js`：补齐 `spinner` / `moon` 图标注册，消除实测期间的 Font Awesome 运行期错误。
+  - `frontend/src/components/VoteOverlay.vue`、`frontend/src/store/plugins/ws_game_events.js`：移除本轮调试日志。
+- 重新验证已通过：
+  - `cd backend && go test ./internal/bot ./internal/engine`
+  - `cd frontend && npm run lint-ci`
+  - Playwright 完整真实流程回归（截图产物已核对）：
+    - 创建房间
+    - 添加 6 个 bot
+    - 开始游戏并完成首夜
+    - 白天无“延长讨论”按钮，房主可见“Enter Night”
+    - 1 号提名 2 号后，先进入 1 号辩护，再切到 2 号 bot 辩护
+    - 顺序投票成功，轮到本人时可正常投票
+    - 投票结算后房主可再次进入夜晚
+    - 浏览器控制台无错误
+- 当前状态：
+- 已无已知阻塞，可进入提交与推送阶段。
+
+2026-03-16 reusable regression automation
+- 已把本轮人工验证固化为仓库内脚本 `frontend/scripts/e2e_room_flow.cjs`，并新增命令：
+  - `cd frontend && npm run e2e:room-flow`
+- 脚本能力：
+  - 若本地 `8080/8081` 无服务，会自动启动后端与前端
+  - 若 Docker 依赖未就绪，会自动执行 `docker compose up -d mysql redis rabbitmq qdrant`
+  - 覆盖完整真实链路：建房、补 6 个 bot、开局、首夜、白天重连恢复、提名、双阶段辩护、顺序投票、再次入夜
+  - 产出报告、截图和前后端日志到 `tmp/e2e-room-flow/`
+- 已新增前端 `playwright` devDependency，并在 `README.md` 补充本地运行说明。
+- 已新增 GitHub Actions workflow：
+  - `.github/workflows/room-flow-regression.yml`
+  - 会在 PR / main push 上执行 `go test ./internal/bot ./internal/engine`、`npm run lint-ci`、`npm run e2e:room-flow`
+  - 会上传 `tmp/e2e-room-flow/` 作为 CI 产物，便于失败排查
+- 已本地验证：
+  - `cd frontend && npm run e2e:room-flow` 通过
+  - 统一 skill client `web_game_playwright_client.js` 冒烟检查通过，截图产物已人工查看
+- 后续最值得继续做的项：
+  - 再补一条“整局直到结算页”的浏览器回归，覆盖胜负判定与 recap 页面
+  - 将夜晚阶段的角色结果也结构化写入可断言的 `report.json`，减少只靠截图排查
+
+2026-03-16 full repository review
+- 进入完整 review：覆盖仓库结构、代码、架构、功能与动态验证。
+- 已完成静态检查：
+  - `cd backend && go test ./...`
+  - `cd frontend && npm run lint-ci`
+  - `cd frontend && npm run e2e:room-flow`
+- 已开始补充“完整整局到 game.ended”的批量对局验证，不依赖 bot，而是用真实 HTTP/WS 多客户端驱动 7 名玩家自动完成夜晚、提名、辩护、顺序投票与胜负结算。
+- 临时审查脚本：
+  - `tmp/review_full_games.cjs`
+- 已完成 10 局完整自动对局，报告落盘：
+  - `tmp/full-game-review-report.json`
+- 10 局结果概览：
+  - 好人胜 6 局（原因均为“恶魔已死亡”）
+  - 坏人胜 4 局（原因均为“只剩2名玩家存活”）
+  - 对局长度范围：2~5 天 / 2~5 夜
+- 额外确认的问题：
+  - `GET /v1/rooms/{room_id}/events` 返回原始 `StoredEvent`，普通房间成员可直接看到 `role.assigned` 等敏感事件。
+  - 房主创建房间后在成员表中仍保留 `dm` 身份；`fetchState` / WS subscribe 依据成员角色投影，导致房主实际可拿到上帝视角状态与事件。
+  - 前端可选 `bmr` / `snv`，但后端实测仍只分配 Trouble Brewing 角色。
+  - `backend/loadtest` 多个场景与真实 API 不一致，存在“报错仍 PASS”与“测试本身未真正覆盖目标行为”的假阳性。
+
+2026-03-16 repository review fixes / final validation
+- 已完成针对 review 发现项的系统性修复，而非最小补丁：
+  - `backend/internal/api/api.go`、`backend/internal/projection/projection.go`、`backend/internal/realtime/ws.go`：统一按事件时点状态做投影；`events/state/replay/ws resync` 不再泄漏未投影原始事件；建房者成员身份改为 `player`，不再天然持有 DM 视角。
+  - `backend/internal/game/setup.go`、`backend/internal/engine/engine.go`、`frontend/src/store/index.js`：只允许并展示当前真实支持的 `tb` 剧本，阻断 `bmr/snv` 假功能入口。
+  - `backend/internal/bot/bot.go`、`backend/internal/bot/manager.go`：bot 现在会跟踪现有玩家并实际发起提名，不再停留在“想提名”的日志分支。
+  - `frontend/src/store/modules/chat.js`、`frontend/src/components/ChatView.vue`、`frontend/src/services/ApiService.js`：修复 evil chat 可见性；assistant 改为基于 `/v1/llm/health` 的能力开关，不再暴露必然 404 的 UI。
+  - `frontend/src/components/VoteOverlay.vue`、`frontend/src/components/NightOverlay.vue`、`frontend/src/store/modules/night.js`、`frontend/src/store/plugins/websocket.js`、`frontend/src/store/plugins/ws_game_events.js`：移除面向用户的调试残留与无效控制台输出。
+  - `backend/loadtest/internal/loadgen/*`：修正与真实 API 脱节的 client / scenario / validator，消除 S5 / S10 / S11 的假阳性与假阴性。
+  - `backend/internal/agent/autodm.go`：抑制游戏结束后迟到 agent 任务触发的 benign `game already ended` 噪音。
+- 已补充回归测试：
+  - `backend/internal/projection/projection_test.go`：覆盖角色分配和私聊投影边界。
+  - `backend/internal/game/setup_test.go`：覆盖不支持剧本的拒绝分支。
+  - `backend/internal/bot/bot_test.go`：覆盖 bot 自动提名。
+- 最终验收已通过：
+  - `cd backend && go test ./...`
+  - `cd backend/loadtest && go test ./...`
+  - `cd frontend && npm run lint-ci`
+  - `cd frontend && npm run build`
+  - `cd frontend && BOTC_E2E_BACKEND_URL=http://127.0.0.1:18080 VUE_APP_API_URL=http://127.0.0.1:18080 VUE_APP_WS_URL=ws://127.0.0.1:18080/ws npm run e2e:room-flow`
+  - `BOTC_REVIEW_BACKEND_URL=http://127.0.0.1:18080 BOTC_REVIEW_WS_URL=ws://127.0.0.1:18080/ws node tmp/review_full_games.cjs`
+- 动态结果：
+  - 浏览器真实流程通过，房主入夜、重连恢复、提名辩护顺序、bot 被提名后自动结束辩护、投票与再次入夜均正常。
+  - 修复后整局自动回归再次完成 10/10 全通过，报告更新到 `tmp/full-game-review-report-rerun.json`。
+  - 普通玩家再取不到他人 `role.assigned`、`true_role`、`night_actions` 等敏感数据；房主也不再拥有隐式上帝视角。
+- 已补做 LLM / AutoDM / RabbitMQ / RAG 真实链路验证：
+  - 使用本地 mock OpenAI 兼容服务 `tmp/mock_llm_server.cjs` 配合 RabbitMQ 与 Qdrant 启动 `AUTODM_ENABLED=true` 后端。
+  - `/v1/llm/health` 返回 `enabled=true`；Qdrant `botc_rules_mock` collection 计数为 27；RabbitMQ `agentdm_tasks` 队列有活跃 consumer。
+  - 通过 1 局真实 WS 驱动对局确认 agent 会实际发起 embeddings / chat completions 请求，`tmp/mock-llm-requests.jsonl` 中可见 `Relevant rule context` 注入，说明 RAG 检索与提示拼装链路已被打通。
+- 当前状态：
+  - 已无已知阻塞，可提交并推送本轮修复。

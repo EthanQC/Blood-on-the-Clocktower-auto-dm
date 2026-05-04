@@ -15,6 +15,43 @@ import (
 	"github.com/qingchang/Blood-on-the-Clocktower-auto-dm/internal/types"
 )
 
+// ViewerForState derives viewer privileges from the projected engine state.
+// Room membership only controls room access; visibility privileges come from
+// the actual in-game player state.
+func ViewerForState(state engine.State, userID string) types.Viewer {
+	viewer := types.Viewer{UserID: userID}
+	if player, ok := state.Players[userID]; ok && player.IsDM {
+		viewer.IsDM = true
+	}
+	return viewer
+}
+
+// ProjectEventStream projects an ordered event stream while advancing state
+// incrementally, so historical events are filtered against the state that
+// existed when each event occurred.
+func ProjectEventStream(baseState engine.State, events []types.Event, userID string) []types.ProjectedEvent {
+	state := baseState.Copy()
+	projected := make([]types.ProjectedEvent, 0, len(events))
+
+	for _, event := range events {
+		viewer := ViewerForState(state, userID)
+		if pe := Project(event, state, viewer); pe != nil {
+			projected = append(projected, *pe)
+		}
+
+		var payload map[string]string
+		_ = json.Unmarshal(event.Payload, &payload)
+		state.Reduce(engine.EventPayload{
+			Seq:     event.Seq,
+			Type:    event.EventType,
+			Actor:   event.ActorUserID,
+			Payload: payload,
+		})
+	}
+
+	return projected
+}
+
 func Project(event types.Event, state engine.State, viewer types.Viewer) *types.ProjectedEvent {
 	if !allowed(event, state, viewer) {
 		return nil

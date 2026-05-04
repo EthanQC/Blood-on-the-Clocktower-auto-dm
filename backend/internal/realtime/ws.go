@@ -22,6 +22,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/qingchang/Blood-on-the-Clocktower-auto-dm/internal/auth"
+	"github.com/qingchang/Blood-on-the-Clocktower-auto-dm/internal/engine"
 	"github.com/qingchang/Blood-on-the-Clocktower-auto-dm/internal/observability"
 	"github.com/qingchang/Blood-on-the-Clocktower-auto-dm/internal/projection"
 	"github.com/qingchang/Blood-on-the-Clocktower-auto-dm/internal/room"
@@ -211,7 +212,7 @@ func (s *Session) handleMessage(msg WSMessage) {
 
 func (s *Session) handleSubscribe(reqID string, payload SubscribePayload) {
 	ctx := context.Background()
-	ok, role, err := s.store.IsMember(ctx, payload.RoomID, s.userID)
+	ok, _, err := s.store.IsMember(ctx, payload.RoomID, s.userID)
 	if err != nil || !ok {
 		s.sendError(reqID, "forbidden", "not a member of room")
 		return
@@ -223,10 +224,10 @@ func (s *Session) handleSubscribe(reqID string, payload SubscribePayload) {
 	}
 	s.subRoom = payload.RoomID
 	s.subID = s.id
-	isDM := role == "dm"
+	viewer := projection.ViewerForState(ra.GetState(), s.userID)
 	ra.Subscribe(s.subID, &room.Subscriber{
 		UserID: s.userID,
-		IsDM:   isDM,
+		IsDM:   viewer.IsDM,
 		Send: func(pe types.ProjectedEvent) {
 			b, _ := json.Marshal(WSMessage{Type: "event", Payload: mustMarshal(pe)})
 			select {
@@ -235,24 +236,17 @@ func (s *Session) handleSubscribe(reqID string, payload SubscribePayload) {
 			}
 		},
 	})
-	events, _ := s.store.LoadEventsAfter(ctx, payload.RoomID, payload.LastSeq, 200)
-	state := ra.GetState()
-	viewer := types.Viewer{UserID: s.userID, IsDM: isDM}
-	for _, e := range events {
-		ev := types.Event{
-			RoomID:            e.RoomID,
-			Seq:               e.Seq,
-			EventID:           e.EventID,
-			EventType:         e.EventType,
-			ActorUserID:       e.ActorUserID,
-			CausationCommand:  e.CausationCommand,
-			Payload:           json.RawMessage(e.PayloadJSON),
-			ServerTimestampMs: e.ServerTime.UnixMilli(),
-		}
-		pe := projection.Project(ev, state, viewer)
-		if pe == nil {
-			continue
-		}
+	baseState, err := s.rebuildRoomState(ctx, payload.RoomID, payload.LastSeq)
+	if err != nil {
+		s.sendError(reqID, "internal", "cannot rebuild room state")
+		return
+	}
+	events, err := s.store.LoadEventsAfter(ctx, payload.RoomID, payload.LastSeq, 200)
+	if err != nil {
+		s.sendError(reqID, "internal", "cannot load room events")
+		return
+	}
+	for _, pe := range projection.ProjectEventStream(baseState, storedEventsToEvents(events), s.userID) {
 		b, _ := json.Marshal(WSMessage{Type: "event", Payload: mustMarshal(pe)})
 		s.send <- b
 		s.metrics.ResyncEvents.Inc()
@@ -316,6 +310,44 @@ func (s *Session) sendRaw(msg WSMessage) {
 func mustMarshal(v any) json.RawMessage {
 	b, _ := json.Marshal(v)
 	return b
+}
+
+func (s *Session) rebuildRoomState(ctx context.Context, roomID string, toSeq int64) (engine.State, error) {
+	events, err := s.store.LoadEventsUpTo(ctx, roomID, toSeq)
+	if err != nil {
+		return engine.State{}, err
+	}
+
+	state := engine.NewState(roomID)
+	for _, e := range events {
+		var payload map[string]string
+		_ = json.Unmarshal([]byte(e.PayloadJSON), &payload)
+		state.Reduce(engine.EventPayload{
+			Seq:     e.Seq,
+			Type:    e.EventType,
+			Actor:   e.ActorUserID,
+			Payload: payload,
+		})
+	}
+
+	return state, nil
+}
+
+func storedEventsToEvents(events []store.StoredEvent) []types.Event {
+	res := make([]types.Event, 0, len(events))
+	for _, e := range events {
+		res = append(res, types.Event{
+			RoomID:            e.RoomID,
+			Seq:               e.Seq,
+			EventID:           e.EventID,
+			EventType:         e.EventType,
+			ActorUserID:       e.ActorUserID,
+			CausationCommand:  e.CausationCommand,
+			Payload:           json.RawMessage(e.PayloadJSON),
+			ServerTimestampMs: e.ServerTime.UnixMilli(),
+		})
+	}
+	return res
 }
 
 type TokenBucket struct {

@@ -530,6 +530,9 @@ func (a *AutoDM) sendMessage(ctx context.Context, roomID, message string) {
 		if result.Success {
 			return
 		}
+		if result.Error != "" && strings.Contains(result.Error, "game already ended") {
+			return
+		}
 		a.logger.Error("MCP send_public_message failed", "error", result.Error)
 	}
 
@@ -548,6 +551,9 @@ func (a *AutoDM) sendMessage(ctx context.Context, roomID, message string) {
 	}
 
 	if err := a.dispatchCommand(cmd); err != nil {
+		if strings.Contains(err.Error(), "game already ended") {
+			return
+		}
 		a.logger.Error("Failed to send AutoDM message", "error", err)
 	}
 }
@@ -605,6 +611,9 @@ func (a *AutoDM) publishGameRecap(ctx context.Context, ev types.Event) {
 		Payload:        payload,
 	}
 	if err := a.dispatchCommand(cmd); err != nil {
+		if strings.Contains(err.Error(), "game already ended") {
+			return
+		}
 		a.logger.Error("AutoDM failed to publish game recap", "error", err, "room_id", ev.RoomID)
 	}
 }

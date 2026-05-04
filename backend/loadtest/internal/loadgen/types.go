@@ -148,7 +148,7 @@ func ScenarioInfo(id string) (name, description string) {
 	case "S9":
 		return "RabbitMQ DLQ Monitoring", "Verify DLQ message count on failures"
 	case "S10":
-		return "Full Game Flow", "Lobby -> Night -> Day -> Vote -> End"
+		return "Game Start Flow", "Lobby -> seat claim -> start_game -> projected event stream"
 	case "S11":
 		return "Chaos Test", "Random disconnects and commands"
 	default:

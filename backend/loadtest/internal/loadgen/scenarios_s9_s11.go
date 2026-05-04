@@ -97,6 +97,15 @@ func (r *Runner) runS10FullGameFlow(ctx context.Context) (ScenarioResult, error)
 		wsClients[i] = ws
 	}
 
+	// All players must issue join commands to enter the event-sourced room state.
+	for i := 0; i < numPlayers; i++ {
+		joinKey := fmt.Sprintf("join_%d_%d", i, time.Now().UnixNano())
+		wsClients[i].SendCommand(ctx, roomID, "join", joinKey, map[string]string{
+			"name": fmt.Sprintf("s10_p%d", i),
+		})
+		time.Sleep(100 * time.Millisecond)
+	}
+
 	// Cleanup
 	defer func() {
 		for _, ws := range wsClients {
@@ -112,8 +121,8 @@ func (r *Runner) runS10FullGameFlow(ctx context.Context) (ScenarioResult, error)
 	// 1. All players claim seats
 	for i := 0; i < numPlayers; i++ {
 		idempotencyKey := fmt.Sprintf("claim_seat_%d_%d", i, time.Now().UnixNano())
-		wsClients[i].SendCommand(ctx, roomID, "claim_seat", idempotencyKey, map[string]int{
-			"seat": i,
+		wsClients[i].SendCommand(ctx, roomID, "claim_seat", idempotencyKey, map[string]string{
+			"seat_number": fmt.Sprintf("%d", i+1),
 		})
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -130,9 +139,9 @@ func (r *Runner) runS10FullGameFlow(ctx context.Context) (ScenarioResult, error)
 	time.Sleep(2 * time.Second)
 
 	// Get room state to check phase
-	roomInfo, err := r.httpClient.GetRoom(ctx, tokens[0], roomID)
+	roomInfo, err := r.httpClient.GetState(ctx, tokens[0], roomID)
 	if err != nil {
-		result.Errors = append(result.Errors, fmt.Sprintf("get room failed: %v", err))
+		result.Errors = append(result.Errors, fmt.Sprintf("get state failed: %v", err))
 	} else {
 		if roomInfo.Phase != "lobby" {
 			phases = append(phases, roomInfo.Phase)
@@ -178,10 +187,21 @@ func (r *Runner) runS10FullGameFlow(ctx context.Context) (ScenarioResult, error)
 	result.Metrics["valid_flow"] = phaseMetrics.ValidFlow
 	result.Metrics["final_phase"] = phaseMetrics.FinalPhase
 
-	result.Passed = seqMetrics.SeqMonotonic
+	result.Passed = len(result.Errors) == 0 &&
+		seqMetrics.SeqMonotonic &&
+		phaseMetrics.ValidFlow &&
+		phaseMetrics.FinalPhase != "" &&
+		phaseMetrics.FinalPhase != "lobby" &&
+		len(events) > 0
 
 	if !seqMetrics.SeqMonotonic {
 		result.Errors = append(result.Errors, "sequence not monotonic")
+	}
+	if phaseMetrics.FinalPhase == "lobby" {
+		result.Errors = append(result.Errors, "game never left lobby")
+	}
+	if len(events) == 0 {
+		result.Errors = append(result.Errors, "no events returned from events API")
 	}
 
 	return result, nil
@@ -309,7 +329,7 @@ func (r *Runner) runS11ChaosTest(ctx context.Context) (ScenarioResult, error) {
 	wg.Wait()
 
 	// Final health check
-	healthResp, err := r.httpClient.Health(ctx)
+	healthResp, err := r.httpClient.Health(context.Background())
 	systemHealthy := err == nil && healthResp != nil && healthResp.Status == "ok"
 
 	// Get final events to validate consistency

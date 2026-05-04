@@ -19,6 +19,30 @@ const (
 	EditionSectsAndViolet Edition = "snv"
 )
 
+func SupportedEditions() []Edition {
+	return []Edition{EditionTroubleBrewing}
+}
+
+func NormalizeEdition(raw string) (Edition, error) {
+	if raw == "" {
+		return EditionTroubleBrewing, nil
+	}
+
+	edition := Edition(raw)
+	for _, supported := range SupportedEditions() {
+		if supported == edition {
+			return edition, nil
+		}
+	}
+
+	return "", fmt.Errorf("unsupported edition %q", raw)
+}
+
+func IsSupportedEdition(raw string) bool {
+	_, err := NormalizeEdition(raw)
+	return err == nil
+}
+
 // Script represents a game script (edition) configuration.
 type Script struct {
 	Edition   Edition
@@ -83,12 +107,17 @@ func (sa *SetupAgent) GenerateAssignments(userIDs []string, seatOrder []int) (*S
 		return nil, fmt.Errorf("player count must be between 5 and 15, got %d", playerCount)
 	}
 
+	edition, err := NormalizeEdition(sa.config.Edition)
+	if err != nil {
+		return nil, err
+	}
+	sa.config.Edition = string(edition)
+
 	dist := GetDistribution(playerCount)
 	if dist == nil {
 		return nil, fmt.Errorf("no distribution for %d players", playerCount)
 	}
 
-	var err error
 	baronInPlay := false
 
 	// Get available roles by type (needed for bluffs even with CustomRoles)
