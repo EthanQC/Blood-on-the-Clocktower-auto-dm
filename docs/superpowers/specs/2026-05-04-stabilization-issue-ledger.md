@@ -74,13 +74,17 @@ These checks were performed without browser gameplay and without printing secret
 
 ## Provider Gate Status
 
-- Status: blocked-missing-key
+- Status: gemini-passed / deepseek-blocked-insufficient-balance
 - Checked file: `backend/.env`
-- Result: `backend/.env=missing`
-- Variables printed: none
-- Provider health: not run because no key/provider configuration is available
+- Result: `backend/.env=present`
+- Variables printed: names only, no secret values
+- Gemini direct minimal request: HTTP 200, result ok, model `gemini-3-flash-preview`
+- DeepSeek direct minimal request: HTTP 402, redacted error class `Insufficient Balance`, model `deepseek-v4-pro`
+- Backend runtime: `botc_backend_eval` Docker container restarted with `backend/.env`; `/health` returned ok
+- Provider health: `/v1/llm/health` returned provider `gemini`, model `gemini-3-flash-preview`, enabled `true`, status `ok`
+- RAG note: backend startup logged `Failed to initialize RAG` because the restarted container mounts `backend/` at `/app` and does not expose repo-level `docs/rules`; provider key validation still passed, but in-game AutoDM/RAG validation should restart with repo-root docs available before accepted Layer 4 closure.
 - Manual gameplay QA: not started
-- Next action: user must place real Gemini and/or DeepSeek credentials in `backend/.env`, then rerun the redacted variable-name check and `/v1/llm/health` minimal provider probe before any browser/manual gameplay observation can count as accepted stabilization evidence.
+- Next action: run accepted Layer 1 browser smoke and/or Task 6 Step 7 in-game AutoDM trigger with the restarted backend; DeepSeek backend-active verification waits for account balance.
 
 ## Documentation Coverage Review
 
@@ -148,7 +152,7 @@ The current design, plan, ledger, and task register cover the required brainstor
 - Scope: clarify Gemini baseline/cost-candidate comments and add commented DeepSeek provider-gate example variables to `backend/.env.example`.
 - Verification: static `rg` provider-config check reran after the edit; no real `.env` or key value was read or printed.
 - Fix commit: `b258024 docs: clarify provider env example`.
-- Accepted provider status: still blocked-missing-key because `backend/.env` is missing.
+- Accepted provider status: Gemini provider gate passed on 2026-05-05; DeepSeek returned insufficient balance.
 
 ## Future Feature Candidate Pool
 

@@ -774,7 +774,7 @@ Expected:
 
 - Output shows variable names only.
 - If no key is available, pause Layer 4 and ask the user to provide or place the key in `backend/.env`.
-- Current result: `backend/.env` is missing; provider gate is `blocked-missing-key`; no provider health or gameplay QA was run.
+- Current result: `backend/.env` exists with provider variables present; variable-name-only checks were run without printing secret values.
 
 - [x] **Step 2: Choose primary models for this pass**
 
@@ -791,7 +791,7 @@ Expected:
 - Detailed four-model quality ranking is deferred.
 - Current result: primary Gemini model and primary DeepSeek model are recorded in the design, ledger, and task register.
 
-- [ ] **Step 3: Configure Gemini path if key is available**
+- [x] **Step 3: Configure Gemini path if key is available**
 
 Set `backend/.env` values locally:
 
@@ -806,6 +806,7 @@ Expected:
 - Set `GEMINI_API_KEY` to the user-supplied Gemini key in `backend/.env`; never copy the key into this plan, the ledger, chat, or commits.
 - `backend/.env` remains untracked.
 - Do not paste key into commits or chat.
+- Current result: Gemini was configured as the active backend provider with `gemini-3-flash-preview`; a direct minimal Gemini request returned HTTP 200.
 
 - [ ] **Step 4: Configure DeepSeek path if key is available**
 
@@ -825,7 +826,7 @@ Expected:
 - Only one provider configuration is active at a time.
 - The active provider/model is recorded without key values.
 
-- [ ] **Step 5: Restart or start backend with env**
+- [x] **Step 5: Restart or start backend with env**
 
 Use the project-supported path:
 
@@ -839,8 +840,9 @@ If backend is currently running in a container, record the active runtime and re
 Expected:
 
 - Backend reports the selected provider/model through health or logs without exposing key material.
+- Current result: replaced the existing `botc_backend_eval` Docker container with the same name and port, using `backend/.env` plus host Docker service addresses. Backend `/health` returned ok.
 
-- [ ] **Step 6: Provider minimal connectivity**
+- [x] **Step 6: Provider minimal connectivity**
 
 Run:
 
@@ -852,6 +854,7 @@ Expected:
 
 - Response shows provider/model/connectivity status.
 - Record provider, model, status, duration, and redacted error class only.
+- Current result: `/v1/llm/health` returned provider `gemini`, model `gemini-3-flash-preview`, enabled `true`, status `ok`. DeepSeek direct minimal request returned HTTP 402 with redacted class `Insufficient Balance`; DeepSeek backend-active verification remains unchecked until balance is available.
 
 - [ ] **Step 7: Trigger in-game AutoDM flow**
 
@@ -1192,4 +1195,4 @@ Expected:
 
 - Final plan status is committed.
 
-## 状态：⏸️ 暂停 - Task 2A 静态 preflight 已完成；provider gate blocked-missing-key；Task 3/4/5/7 实测与实测驱动修复均未处理
+## 状态：🔄 进行中 - Task 6 Step 6 已完成；Gemini provider gate 通过；DeepSeek blocked-insufficient-balance；下一步是 Task 3 Layer 1 或 Task 6 Step 7 in-game AutoDM 触发
