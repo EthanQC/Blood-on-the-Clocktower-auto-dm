@@ -28,7 +28,7 @@ Execution ordering override:
 2. Before counting any Task 3, Task 4, or Task 5 manual browser result as valid, complete Task 6 Step 1 through Step 6 for at least one real provider without leaking secrets.
 3. Task 6 Step 7, the in-game AutoDM trigger, can run later as part of Layer 4, but provider availability must be established before the next accepted manual game-flow test.
 4. Any issue discovered only during pre-key manual browser work is a candidate issue, not an accepted P0/P1/P2, until reproduced after the provider gate.
-5. Current provider gate status after non-game checking: blocked-missing-key because `backend/.env` is missing.
+5. Current provider gate status after non-game checking: Gemini passed with `backend/.env`; DeepSeek returned insufficient balance; in-game AutoDM/RAG validation still needs a runtime with repo-level `docs/rules` mounted.
 
 ## File Structure
 
@@ -75,7 +75,7 @@ git log -1 --oneline
 
 Expected:
 
-- Existing untracked `AGENTS.md` and `.codex/` may remain.
+- `AGENTS.md` is now tracked; local `.codex/hooks*` artifacts are ignored and should not appear in normal `git status`.
 - No unexpected tracked changes are present.
 - Record the commit hash in the issue ledger header.
 
@@ -1168,7 +1168,7 @@ git diff --name-only HEAD~10..HEAD | sort
 Expected:
 
 - Determine whether any changed area has local instructions requiring AGENTS updates.
-- Do not modify untracked `AGENTS.md` unless the stabilization changes require it and the user approves incorporating that untracked file.
+- `AGENTS.md` is tracked as of the repository hygiene pass; update it only when repository operating instructions change.
 
 - [ ] **Step 2: Inspect file header comments**
 

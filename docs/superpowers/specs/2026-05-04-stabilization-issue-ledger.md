@@ -54,9 +54,10 @@ These items do not require accepted browser gameplay to investigate. They should
 | STATIC-009 | Test coverage | Backend tests are limited; frontend has lint but no test suite. | Backlog / process risk | Use focused tests where possible and rely on accepted manual QA for playable confidence. |
 | STATIC-010 | Local Go availability | Host `go` is unavailable, but Docker image `golang:1.25.5-alpine` exists and can run focused backend tests. | Process risk | Use Docker Go for backend unit verification until host Go is installed. |
 | STATIC-011 | Node version | Node v25.8.1 is aggressive for Vue 2 / Vue CLI 5 and may cause compatibility noise; current lint/build completed with known warnings only. | Candidate P2 | Record warnings; do not downgrade Node in this pass. |
-| STATIC-012 | API keys | `backend/.env` is missing, so provider gate is blocked before accepted browser/manual gameplay QA. | Provider gate blocker | User must supply/place key before accepted manual gameplay QA. |
+| STATIC-012 | API keys | `backend/.env` was missing during preflight; Gemini provider gate is now passed, while DeepSeek returned insufficient balance. | Provider gate partial pass | Keep `.env` local and uncommitted; use Gemini for accepted QA until DeepSeek is topped up. |
 | STATIC-013 | Provider docs/model facts | Gemini API free tier and DeepSeek V4 availability were checked against official docs during brainstorming. | Reference | Re-check official docs if model names or pricing become central to a later A/B decision. |
 | STATIC-014 | Candidate defense fix | A candidate patch exists for `State.Copy()` not preserving defense progress flags, but it came from pre-key observation. | Static candidate fix only | Focused unit verification succeeded in Docker Go; may be committed as a static candidate fix, but STAB-002 remains unprocessed until provider-gated reproduction and manual regression. |
+| STATIC-015 | RAG runtime mount | The restarted `botc_backend_eval` container mounted `backend/` at `/app`, while `backend/cmd/server/main.go` hardcodes `../docs/rules`; startup logged `Failed to initialize RAG` because repo-level docs were unavailable. | Environment blocker for accepted Layer 4 RAG closure | Before in-game AutoDM/RAG validation, run backend with repo root mounted or make the rules directory configurable. |
 
 ## Task 2A Static Preflight Results
 
@@ -86,6 +87,18 @@ These checks were performed without browser gameplay and without printing secret
 - Manual gameplay QA: not started
 - Next action: run accepted Layer 1 browser smoke and/or Task 6 Step 7 in-game AutoDM trigger with the restarted backend; DeepSeek backend-active verification waits for account balance.
 
+## Environment Issue Register
+
+### ENV-001 - RAG rules path unavailable in Docker backend eval runtime
+
+- Status: open
+- Scope: runtime/environment, not provider key validity
+- Observed runtime: `botc_backend_eval` Docker container mounted `/Users/abble/Blood-on-the-Clocktower-auto-dm/backend` at `/app`
+- Code expectation: `backend/cmd/server/main.go` initializes RAG from `../docs/rules`
+- Observed result: backend startup logged `Failed to initialize RAG` because `../docs/rules` did not exist inside that container layout
+- Impact: Gemini provider health and direct LLM calls pass, but accepted Layer 4 AutoDM/RAG closure should not proceed until the runtime exposes repo-level `docs/rules`
+- Next action: start backend from a repo-root mount with working directory `backend`, or add a config option such as `RAG_RULES_DIR` before accepted RAG validation
+
 ## Documentation Coverage Review
 
 The current design, plan, ledger, and task register cover the required brainstorm and stabilization topics:
@@ -114,7 +127,7 @@ The current design, plan, ledger, and task register cover the required brainstor
 | npm audit risk. | STATIC-008; task register B-015/D-008 |
 | Local/container Go availability risk. | STATIC-010; task register A-016 |
 | Node v25 Vue 2 / Vue CLI 5 compatibility noise. | STATIC-011; task register A-016 |
-| Missing key blocks provider gate. | STATIC-012; Provider Gate Status; task register A-014/C-001 |
+| Provider key gate status. | STATIC-012; Provider Gate Status; task register A-014/C-001 |
 | `State.Copy()` defense progress candidate patch status. | STATIC-014; STAB-002; task register A-011/C-008 |
 | STAB-001/STAB-002 remain candidate/unprocessed, not formal accepted issue severities. | Validity Reset; Issues section; task register C-007/C-008 |
 | Task 3/4/5/7 manual QA and manual-driven repairs remain unprocessed. | Plan status line; task register sections B/C |

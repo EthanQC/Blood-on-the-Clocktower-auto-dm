@@ -51,3 +51,8 @@ townsquare/
 loadtest_*.json
 tmp/e2e-room-flow/
 tmp/e2e-room-flow-client/
+.playwright-cli/
+
+# Local Codex hook artifacts. Keep tracked project plans under `.Codex/plans/`.
+.codex/hooks.json
+.codex/hooks/
